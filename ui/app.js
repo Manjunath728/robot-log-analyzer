@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = document.getElementById('loader');
     const resultsContainer = document.getElementById('results-container');
     const alertBox = document.getElementById('alert-box');
+    const pipelineLog = document.getElementById('pipeline-log');
 
     const refreshKbBtn = document.getElementById('refresh-kb-btn');
 

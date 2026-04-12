@@ -19,81 +19,72 @@ from engine.parser import parse_robot_repo
 from engine.logger import logger
 
 def bootstrap_schema(graph: Neo4jGraph):
-    """
-    Enforce schema constraints in Neo4j to prevent "unrecognized label/property" warnings.
-    This acts as a 'seed' for the database schema.
-    """
+    """Enforce schema constraints in Neo4j to prevent warnings."""
     logger.info("⚡ Bootstrapping Neo4j Schema (Constraints & Labels)...")
-    
-    # Use Indexes instead of Existence Constraints to support Community Edition.
-    # An index on a property implicitly defines the label and property in the schema.
     commands = [
-        # TestCase Constraints
         "CREATE CONSTRAINT IF NOT EXISTS FOR (t:TestCase) REQUIRE t.name IS UNIQUE",
-        
-        # Keyword Constraints
         "CREATE CONSTRAINT IF NOT EXISTS FOR (k:Keyword) REQUIRE k.name IS UNIQUE",
-        
-        # Seed the PastFailure schema via Indexes (Safe for Community Edition)
         "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.timestamp)",
         "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.error_message)",
         "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.failed_keyword)"
     ]
-    
     for cmd in commands:
         try:
             graph.query(cmd)
-            logger.debug(f"Executed Schema Command: {cmd}")
         except Exception as e:
-            logger.warning(f"Schema Command failed (Safe to ignore if cluster is still starting): {e}")
+            logger.warning(f"Schema Command failed: {e}")
 
-def init_kb(repo_path: str):
-    """Parse Robot Framework test definitions and build the Neo4j Knowledge Base."""
-    logger.info(f"[*] Starting Knowledge Base initialization from: {repo_path}")
+def clear_db(graph: Neo4jGraph):
+    """Wipe the current Knowledge Base topology."""
+    logger.info("[*] Wiping previous Graph topology...")
+    graph.query("MATCH (n) DETACH DELETE n")
+
+def load_repo_to_graph(graph: Neo4jGraph, repo_path: str):
+    """Parse a single Robot repo and merge it into the Graph."""
+    logger.info(f"[*] Loading Robot logic from: {repo_path}")
     
     tests, keywords = parse_robot_repo(repo_path)
     if not tests:
-        logger.error("[!] No tests found or parsed. Check your path.")
+        logger.warning(f"[!] No tests found in {repo_path}. Skipping.")
         return
 
-    logger.info("[*] Connecting to Neo4j Graph Database...")
+    logger.info(f"[*] Merging {len(keywords)} Keywords and {len(tests)} Tests...")
+    
+    # Merge Keywords
+    for kw in keywords:
+        graph.query(
+            "MERGE (k:Keyword {name: $name}) SET k.steps = $steps, k.source = $source, k.raw_text = $raw_text",
+            params={"name": kw.name, "steps": kw.steps, "source": kw.source, "raw_text": kw.raw_text}
+        )
+
+    # Merge Tests
+    for t in tests:
+        graph.query(
+            "MERGE (tc:TestCase {name: $name}) SET tc.steps = $steps, tc.tags = $tags, tc.source = $source",
+            params={"name": t.name, "steps": t.steps, "tags": t.tags, "source": t.source}
+        )
+        for step in t.steps:
+            graph.query(
+                "MATCH (tc:TestCase {name: $tc}), (k:Keyword {name: $step}) MERGE (tc)-[:CALLS]->(k)",
+                params={"tc": t.name, "step": step}
+            )
+
+    # Link Keywords recursively
+    for kw in keywords:
+        for step in kw.steps:
+            graph.query(
+                "MATCH (k1:Keyword {name: $parent}), (k2:Keyword {name: $child}) MERGE (k1)-[:CALLS]->(k2)",
+                params={"parent": kw.name, "child": step}
+            )
+
+def init_kb(repo_path: str):
+    """Standard CLI-based full initialization (Wipe + Load)."""
     try:
         graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
-
-        # 1. Warm up schema first
         bootstrap_schema(graph)
-
-        logger.info("[*] Wiping previous Graph topology...")
-        graph.query("MATCH (n) DETACH DELETE n")
-
-        logger.info(f"[*] Building {len(keywords)} Custom Keyword Nodes...")
-        for kw in keywords:
-            graph.query(
-                "MERGE (k:Keyword {name: $name}) SET k.steps = $steps, k.source = $source, k.raw_text = $raw_text",
-                params={"name": kw.name, "steps": kw.steps, "source": kw.source, "raw_text": kw.raw_text}
-            )
-
-        logger.info(f"[*] Building {len(tests)} TestCase Nodes and routing internal logic paths...")
-        for t in tests:
-            graph.query(
-                "MERGE (tc:TestCase {name: $name}) SET tc.steps = $steps, tc.tags = $tags, tc.source = $source",
-                params={"name": t.name, "steps": t.steps, "tags": t.tags, "source": t.source}
-            )
-            for step in t.steps:
-                graph.query(
-                    "MATCH (tc:TestCase {name: $tc}), (k:Keyword {name: $step}) MERGE (tc)-[:CALLS]->(k)",
-                    params={"tc": t.name, "step": step}
-                )
-
-        logger.info("[*] Mapping recursive Keyword-to-Keyword logic flows...")
-        for kw in keywords:
-            for step in kw.steps:
-                graph.query(
-                    "MATCH (k1:Keyword {name: $parent}), (k2:Keyword {name: $child}) MERGE (k1)-[:CALLS]->(k2)",
-                    params={"parent": kw.name, "child": step}
-                )
-
-        logger.info("[+] Pure Graph Knowledge Base successfully mapped into Neo4j!")
+        clear_db(graph)
+        load_repo_to_graph(graph, repo_path)
+        logger.info("[+] KB successfully mapped.")
     except Exception as e:
         logger.critical(f"Critical Error building Graph: {e}")
 
@@ -106,7 +97,6 @@ def main():
         init_kb(args.init_kb)
     else:
         logger.info("Usage: python run.py --init-kb <path-to-robot-tests>")
-        logger.info("       uvicorn engine.server:app --reload  (for web UI)")
 
 if __name__ == "__main__":
     main()

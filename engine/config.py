@@ -4,6 +4,7 @@ All environment variables are loaded from .env and exposed as module-level const
 """
 
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,3 +23,11 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
 # Embedding
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
+
+# Knowledge Base Automation
+_kb_repos_raw = os.getenv("KB_REPOS", '["examples"]')
+try:
+    KB_REPOS = json.loads(_kb_repos_raw)
+except Exception:
+    # Fallback for simple comma-separated string if JSON parsing fails
+    KB_REPOS = [r.strip() for r in _kb_repos_raw.split(",") if r.strip()]

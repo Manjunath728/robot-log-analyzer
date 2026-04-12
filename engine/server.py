@@ -4,6 +4,8 @@ import shutil
 import time
 import uuid
 import re
+import subprocess
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -17,13 +19,59 @@ from langchain_openai import ChatOpenAI
 from engine.config import (
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD,
     EMBEDDING_MODEL, LLM_DEBUG, OPENROUTER_API_KEY,
-    LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE
+    LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE,
+    KB_REPOS
 )
 from engine.parser import parse_output_xml
 from engine.helpers import failure_to_doc
 from engine.logger import logger
+from engine.cli import bootstrap_schema, clear_db, load_repo_to_graph
 
-app = FastAPI(title="Agentic RAG Engine")
+def sync_kb_sources():
+    """Automated startup sync: Clones/Pulls repos and loads them into Neo4j."""
+    logger.info("🚀 Starting Automated Knowledge Base Synchronization...")
+    
+    try:
+        graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
+        bootstrap_schema(graph)
+        clear_db(graph)
+        
+        temp_repos_root = "temp_repos"
+        os.makedirs(temp_repos_root, exist_ok=True)
+        
+        for repo_source in KB_REPOS:
+            target_path = repo_source
+            
+            # Handle Git URLs
+            if repo_source.startswith("http") or repo_source.startswith("git@"):
+                repo_name = re.sub(r'[^a-zA-Z0-9]', '_', repo_source.split('/')[-1])
+                target_path = os.path.join(temp_repos_root, repo_name)
+                
+                if os.path.exists(target_path):
+                    logger.info(f"[*] Repository {repo_source} exists. Pulling latest...")
+                    subprocess.run(["git", "-C", target_path, "pull"], check=False)
+                else:
+                    logger.info(f"[*] Cloning repository {repo_source}...")
+                    subprocess.run(["git", "clone", repo_source, target_path], check=False)
+            
+            # Load into Graph
+            if os.path.exists(target_path):
+                load_repo_to_graph(graph, target_path)
+            else:
+                logger.warning(f"[!] Path/Repo not found: {target_path}")
+                
+        logger.info("✅ Automated KB Synchronization Complete.")
+    except Exception as e:
+        logger.error(f"❌ Automated KB Sync failed: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Sync Knowledge Base
+    sync_kb_sources()
+    yield
+    # Shutdown logic (if any) could go here
+
+app = FastAPI(title="Agentic RAG Engine", lifespan=lifespan)
 
 # Ensure necessary directories exist
 os.makedirs("ui", exist_ok=True)

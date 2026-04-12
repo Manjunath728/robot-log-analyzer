@@ -136,6 +136,18 @@ async def refresh_kb():
     gen = sync_kb_generator()
     return StreamingResponse(wrap_sync_generator(gen), media_type="application/x-ndjson")
 
+@app.get("/api/kb-status")
+async def get_kb_status():
+    """Quick check of KB health and node count."""
+    try:
+        from langchain_community.graphs import Neo4jGraph
+        graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
+        # Check if we have any TestCases or Keywords
+        count = graph.query("MATCH (n) WHERE n:TestCase OR n:Keyword RETURN count(n) AS c")[0]['c']
+        return {"status": "synced" if count > 0 else "empty", "count": count}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/")
 def serve_index():
     return FileResponse("ui/index.html")

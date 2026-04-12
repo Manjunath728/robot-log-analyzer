@@ -18,6 +18,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let stats = { failures: 0, systemic: 0, analyzed: 0, total: 0 };
     let kbSynced = false;
 
+    // Check KB Status on Load
+    async function checkKbStatus() {
+        try {
+            const response = await fetch('/api/kb-status');
+            const data = await response.json();
+            if (data.status === 'synced') {
+                kbStatusChip.textContent = `KB: Synced ✓ (${data.count})`;
+                kbStatusChip.className = "kb-chip synced";
+            } else if (data.status === 'empty') {
+                kbStatusChip.textContent = "KB: Empty ⚠";
+                kbStatusChip.className = "kb-chip";
+            }
+        } catch (error) {
+            console.error("KB Status check failed.");
+        }
+    }
+    checkKbStatus();
+
     // Pipeline Controller
     const PipelineController = {
         stages: ['INGESTION', 'PARSE', 'GRAPH', 'AGENT', 'VECTOR', 'RCA'],

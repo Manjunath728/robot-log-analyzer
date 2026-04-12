@@ -6,25 +6,22 @@ import uuid
 from pathlib import Path
 from datetime import datetime
 
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 
-# Langchain Dependencies
 from langchain_community.vectorstores import FAISS
 from langchain_neo4j import Neo4jGraph
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
 
-# Project Components
-from config import (
+from engine.config import (
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD,
     OPENROUTER_API_KEY, LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE,
     EMBEDDING_MODEL,
 )
-from parser import parse_robot_repo, parse_output_xml
-from app import extract_test_id, failure_to_doc
+from engine.parser import parse_output_xml
+from engine.helpers import failure_to_doc
 
 app = FastAPI(title="Agentic RAG Engine")
 

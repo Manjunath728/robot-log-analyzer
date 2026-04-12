@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let icon = 'chevron-right';
         if (type === 'done') icon = 'check-circle';
         if (type === 'error') icon = 'alert-circle';
+        if (type === 'inference') icon = 'brain';
         
         li.innerHTML = `<i data-lucide="${icon}"></i> <span>${message}</span>`;
         pipelineLog.appendChild(li);

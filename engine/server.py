@@ -195,7 +195,8 @@ async def analyze_failures(file: UploadFile = File(...)):
                 exec_content = "\n\n---\n\n".join([f"[SIMILAR RUNTIME CRASH LOG: {doc.metadata.get('test', 'Unknown')}]\n{doc.page_content}" for doc in exec_results])
 
                 logger.info(f"Context compiled for {failure.name}. Ready for inference.")
-                yield json.dumps({"type": "status", "message": f"⚡ [Test: {failure.name}] Initiating Agentic RCA Inference..."}) + "\n"
+                yield json.dumps({"type": "status", "message": f"⚡ [Test: {failure.name}] Retrieval complete. Compiling Agent memory..."}) + "\n"
+                yield json.dumps({"type": "inference", "message": f"⏳ [Test: {failure.name}] AI Agent is thinking & drafting RCA..."}) + "\n"
 
                 prompt = f"""
 ================ SYSTEM PROMPT ================

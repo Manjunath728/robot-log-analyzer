@@ -311,8 +311,8 @@ button:not(.btn-secondary):disabled {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.05);
-    border: 2px solid var(--border-color);
+    background: rgba(255,255,255,0.02);
+    border: 2px solid rgba(255,255,255,0.05);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -321,11 +321,11 @@ button:not(.btn-secondary):disabled {
     transition: all 0.4s ease;
 }
 
-.step-icon i { width: 16px; height: 16px; color: var(--text-muted); }
+.step-icon i { width: 16px; height: 16px; color: var(--text-muted); opacity: 0.3; }
 
 .step-content { display: flex; flex-direction: column; }
-.step-label { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); transition: color 0.4s; }
-.step-subtext { font-size: 0.75rem; color: var(--text-muted); opacity: 0.6; }
+.step-label { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); opacity: 0.5; transition: all 0.4s; }
+.step-subtext { font-size: 0.75rem; color: var(--text-muted); opacity: 0.3; }
 
 /* Step States */
 .step.active .step-icon {

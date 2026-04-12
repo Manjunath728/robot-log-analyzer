@@ -41,7 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
         stages: ['INGESTION', 'PARSE', 'GRAPH', 'AGENT', 'VECTOR', 'RCA'],
         
         reset() {
-            this.stages.forEach(s => this.setStage(s, 'pending', 'Pending...'));
+            const idleLabels = {
+                INGESTION: 'Waiting for file...',
+                PARSE: 'Awaiting detection...',
+                GRAPH: 'Ready...',
+                AGENT: 'Ready...',
+                VECTOR: 'Ready...',
+                RCA: 'Ready...'
+            };
+            this.stages.forEach(s => this.setStage(s, 'pending', idleLabels[s]));
             stats = { failures: 0, systemic: 0, analyzed: 0, total: 0 };
             this.updateStats();
         },

@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <div class="rca-analysis">
                         <h4><i data-lucide="sparkles" style="width:18px"></i> Agentic Root Cause</h4>
-                        <div class="rca-content-text">${escapeHtml(f.rca)}</div>
+                        <div class="rca-content-text">${marked.parse(f.rca || '')}</div>
                     </div>
                 </div>
             `;

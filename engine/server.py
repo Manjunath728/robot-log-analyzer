@@ -3,6 +3,7 @@ import json
 import shutil
 import time
 import uuid
+import re
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,16 @@ app = FastAPI(title="Agentic RAG Engine")
 os.makedirs("ui", exist_ok=True)
 os.makedirs("temp_data", exist_ok=True)
 app.mount("/static", StaticFiles(directory="ui"), name="static")
+
+def clean_llm_json(text: str) -> str:
+    """Helper to extract JSON from LLM response strings which might be wrapped in ```json ... ```"""
+    text = text.strip()
+    if text.startswith("```"):
+        # Remove starting ```json or ```
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        # Remove ending ```
+        text = re.sub(r'\s*```$', '', text)
+    return text.strip()
 
 @app.get("/")
 def serve_index():
@@ -135,12 +146,14 @@ Analyze the failure based on the following retrieved contexts from our Vector Da
 [RUNTIME CRASH CONTEXT (FAISS MEMORY)]
 {exec_content}
 
-TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTLY with the following sections formatted in Markdown:
-
-1. **Root Cause & Expected Behavior**: Explain the exact cause of the failure and what the behavior was expected to be.
-2. **Test Fix Needed**: Detail any specific modifications required within the Robot Framework test scripts.
-3. **System Bug / Issue**: Determine if this is an underlying system/application bug. If yes, write a brief bug report summary.
-4. **Recommendations / Context**: Any further actions required, missing variables, or confidence metrics.
+TASK: Analyze why '{failure.name}' broke. You must return your response STRICTLY as a JSON object (no other text) with the following exact keys:
+{
+  "root_cause": "Detailed explanation of the failure cause and expected behavior.",
+  "test_fix": "Markdown list of specific changes needed in the Robot test scripts.",
+  "system_bug": "Brief summary if this is a system/app bug, or null if it is a test issue.",
+  "confidence": "low/medium/high",
+  "recommendations": "Any further actions or context."
+}
 ===============================================
 """
                 if LLM_DEBUG:
@@ -153,13 +166,19 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
                             temperature=LLM_TEMPERATURE,
                         )
                         response = llm.invoke(prompt)
-                        rca_text = response.content
+                        rca_text = clean_llm_json(response.content)
                     except Exception as e:
                         logger.error(f"LLM Invocation Failed: {str(e)}")
-                        rca_text = f"AI Evaluation failed: {str(e)}"
+                        rca_text = json.dumps({"root_cause": f"AI Evaluation failed: {str(e)}", "confidence": "none"})
                 else:
-                    logger.info("LLM_DEBUG is FALSE. Returning raw prompt for audit.")
-                    rca_text = prompt
+                    logger.info("LLM_DEBUG is FALSE. Returning structured Mock JSON for audit.")
+                    rca_text = json.dumps({
+                        "root_cause": f"PROMPT AUDIT MODE: {failure.name} analysis context compiled internally.",
+                        "test_fix": "- Review the compiled prompt in the audit logs for context details.\n- Enable LLM_DEBUG to see AI-generated steps.",
+                        "system_bug": "Simulated check: System appears stable in debug mode.",
+                        "confidence": "high",
+                        "recommendations": "Check vector and graph logs for correctness of retrieved nodes."
+                    })
                     
                 try:
                     write_query = """

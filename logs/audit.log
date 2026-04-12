@@ -61,3 +61,42 @@ Property existence constraint requires Neo4j Enterprise Edition. Note that only 
 2026-04-12 12:38:25 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
 2026-04-12 12:38:25 [INFO] audit: Full analysis pipeline finished.
 2026-04-12 12:38:25 [INFO] audit: Cleaned up temp file: temp_data/output_1775997462_f8d491c0.xml
+2026-04-12 12:41:25 [INFO] audit: Incoming Request: File=output.xml, TempPath=temp_data/output_1775997685_d1c0db5c.xml
+2026-04-12 12:41:25 [INFO] audit: File saved successfully: temp_data/output_1775997685_d1c0db5c.xml
+2026-04-12 12:41:25 [INFO] audit: Parsing XML output...
+2026-04-12 12:41:25 [INFO] audit: Detected 1 failed tests. Connecting to Graph/Embedding DBs...
+2026-04-12 12:41:42 [INFO] audit: ✓ Connected to Neo4j and Embedding engine.
+2026-04-12 12:41:42 [INFO] audit: Initializing Short-term Flow Memory (FAISS)...
+2026-04-12 12:41:44 [INFO] audit: Analyzing Failure: API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:41:44 [INFO] audit: Retrieved 1 past failure records for API Test 06 - Compare Two Identical API Responses.
+2026-04-12 12:41:45 [INFO] audit: Context compiled for API Test 06 - Compare Two Identical API Responses. Ready for inference.
+2026-04-12 12:41:45 [INFO] audit: LLM_DEBUG is TRUE. Invoking actual LLM (nvidia/nemotron-3-super-120b-a12b:free)...
+2026-04-12 12:42:08 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:42:08 [INFO] audit: Full analysis pipeline finished.
+2026-04-12 12:42:08 [INFO] audit: Cleaned up temp file: temp_data/output_1775997685_d1c0db5c.xml
+2026-04-12 12:42:28 [INFO] audit: Incoming Request: File=output.xml, TempPath=temp_data/output_1775997748_5aa6a03b.xml
+2026-04-12 12:42:28 [INFO] audit: File saved successfully: temp_data/output_1775997748_5aa6a03b.xml
+2026-04-12 12:42:28 [INFO] audit: Parsing XML output...
+2026-04-12 12:42:28 [INFO] audit: Detected 1 failed tests. Connecting to Graph/Embedding DBs...
+2026-04-12 12:42:35 [INFO] audit: ✓ Connected to Neo4j and Embedding engine.
+2026-04-12 12:42:35 [INFO] audit: Initializing Short-term Flow Memory (FAISS)...
+2026-04-12 12:42:37 [INFO] audit: Analyzing Failure: API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:42:37 [INFO] audit: Retrieved 1 past failure records for API Test 06 - Compare Two Identical API Responses.
+2026-04-12 12:42:38 [INFO] audit: Context compiled for API Test 06 - Compare Two Identical API Responses. Ready for inference.
+2026-04-12 12:42:38 [INFO] audit: LLM_DEBUG is TRUE. Invoking actual LLM (nvidia/nemotron-3-super-120b-a12b:free)...
+2026-04-12 12:42:50 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:42:50 [INFO] audit: Full analysis pipeline finished.
+2026-04-12 12:42:50 [INFO] audit: Cleaned up temp file: temp_data/output_1775997748_5aa6a03b.xml
+2026-04-12 12:43:25 [INFO] audit: Incoming Request: File=output.xml, TempPath=temp_data/output_1775997805_eab6e908.xml
+2026-04-12 12:43:25 [INFO] audit: File saved successfully: temp_data/output_1775997805_eab6e908.xml
+2026-04-12 12:43:25 [INFO] audit: Parsing XML output...
+2026-04-12 12:43:26 [INFO] audit: Detected 1 failed tests. Connecting to Graph/Embedding DBs...
+2026-04-12 12:43:36 [INFO] audit: ✓ Connected to Neo4j and Embedding engine.
+2026-04-12 12:43:36 [INFO] audit: Initializing Short-term Flow Memory (FAISS)...
+2026-04-12 12:43:36 [INFO] audit: Analyzing Failure: API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:43:36 [INFO] audit: Retrieved 1 past failure records for API Test 06 - Compare Two Identical API Responses.
+2026-04-12 12:43:37 [INFO] audit: Context compiled for API Test 06 - Compare Two Identical API Responses. Ready for inference.
+2026-04-12 12:43:37 [INFO] audit: LLM_DEBUG is TRUE. Invoking actual LLM (nvidia/nemotron-3-super-120b-a12b:free)...
+2026-04-12 12:44:14 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
+2026-04-12 12:44:14 [INFO] audit: Full analysis pipeline finished.
+2026-04-12 12:44:14 [INFO] audit: Cleaned up temp file: temp_data/output_1775997805_eab6e908.xml

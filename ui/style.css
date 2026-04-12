@@ -402,28 +402,99 @@ button:not(.btn-secondary):disabled {
     gap: 0.4rem;
 }
 
-/* Right Panel: Results */
-.input-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 2rem;
+/* Right Panel: Launchpad */
+.launchpad-section {
+    padding: 1.5rem;
+    text-align: center;
 }
 
-.file-upload-pill {
+.drop-zone {
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 2.5rem 1.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.drop-zone:hover, .drop-zone.dragover {
+    background: rgba(102, 252, 241, 0.05);
+    border-color: var(--primary);
+    box-shadow: inset 0 0 20px rgba(102, 252, 241, 0.05);
+}
+
+.upload-icon {
+    width: 48px;
+    height: 48px;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 10px rgba(102, 252, 241, 0.3));
+}
+
+.drop-zone h3 { font-weight: 600; margin-bottom: 0.5rem; }
+.drop-zone p { color: var(--text-muted); font-size: 0.95rem; }
+.browse-link { color: var(--primary); text-decoration: underline; font-weight: 600; cursor: pointer; }
+
+/* File Info Overlay */
+.file-info {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--bg-color);
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.6rem 1rem;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid var(--border-color);
-    border-radius: 50px;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.3s;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 10;
 }
-.file-upload-pill:hover { border-color: var(--primary-dim); color: #fff; }
+
+.file-details {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-align: left;
+    background: rgba(102, 252, 241, 0.05);
+    border: 1px solid rgba(102, 252, 241, 0.2);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+}
+
+.file-icon { color: var(--primary); width: 32px; height: 32px; }
+.file-name { display: block; font-weight: 700; color: #fff; font-size: 1.1rem; }
+.file-subtext { display: block; font-size: 0.75rem; color: var(--text-muted); }
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: var(--error);
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    transition: transform 0.2s;
+}
+.btn-icon:hover { transform: scale(1.1); }
+
+/* Ignite Button */
+.ignite-container {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: center;
+    animation: fadeIn 0.4s ease-out;
+}
+
+.ignite-btn {
+    width: 100%;
+    max-width: 400px;
+    padding: 1rem 2rem !important;
+    font-size: 1.1rem !important;
+    letter-spacing: 1px;
+    box-shadow: 0 0 20px rgba(102, 252, 241, 0.2);
+}
+
+.ignite-btn:hover {
+    box-shadow: 0 0 30px rgba(102, 252, 241, 0.4) !important;
+}
 
 /* Skeleton */
 .skeleton-container { margin-bottom: 2rem; }

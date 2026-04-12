@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleLogBtn = document.getElementById('toggle-log-btn');
     const logDrawer = document.getElementById('log-drawer');
 
+    // Launchpad elements
+    const dropZone = document.getElementById('drop-zone');
+    const fileInfo = document.getElementById('file-info');
+    const igniteContainer = document.getElementById('ignite-container');
+    const changeFileBtn = document.getElementById('change-file-btn');
+    const browseLink = document.getElementById('browse-link');
+
     // State
     let logEventCount = 0;
     let stats = { failures: 0, systemic: 0, analyzed: 0, total: 0 };
@@ -191,9 +198,56 @@ document.addEventListener('DOMContentLoaded', () => {
         logCounter.textContent = `Agent Ops Log (${logEventCount} events)`;
     }
 
-    xmlUpload.addEventListener('change', () => {
-        const file = xmlUpload.files[0];
-        fileDisplay.textContent = file ? file.name : 'Load output.xml';
+    // Drag and Drop Handlers
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length) {
+            xmlUpload.files = files;
+            handleFileSelect(files[0]);
+        }
+    });
+
+    browseLink.addEventListener('click', (e) => {
+        e.stopPropagation();
+        xmlUpload.click();
+    });
+
+    xmlUpload.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFileSelect(e.target.files[0]);
+    });
+
+    function handleFileSelect(file) {
+        if (!file.name.endsWith('.xml')) {
+            showAlert("Please select a valid Robot Framework output.xml file.", "error");
+            return;
+        }
+        fileDisplay.textContent = file.name;
+        fileInfo.classList.remove('hidden');
+        igniteContainer.classList.remove('hidden');
+        PipelineController.reset();
+    }
+
+    changeFileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInfo.classList.add('hidden');
+        igniteContainer.classList.add('hidden');
+        xmlUpload.value = '';
+        PipelineController.reset();
     });
 
     analyzeBtn.addEventListener('click', async () => {

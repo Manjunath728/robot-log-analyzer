@@ -110,6 +110,42 @@ h1 span {
     text-shadow: 0 0 15px rgba(102,252,241, 0.3);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.btn-secondary:hover {
+    background: rgba(102, 252, 241, 0.1);
+    border-color: var(--primary-dim);
+    color: var(--primary);
+}
+
+.btn-secondary i {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.3s ease;
+}
+
+.syncing i {
+    animation: rotate 1s infinite linear;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .status-badge {
     display: flex;
     align-items: center;

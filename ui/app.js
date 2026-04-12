@@ -6,6 +6,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsContainer = document.getElementById('results-container');
     const alertBox = document.getElementById('alert-box');
 
+    const refreshKbBtn = document.getElementById('refresh-kb-btn');
+
+    refreshKbBtn.addEventListener('click', async () => {
+        try {
+            refreshKbBtn.disabled = true;
+            refreshKbBtn.classList.add('syncing');
+            showAlert('Synchronizing Knowledge Base... Please wait.', 'success');
+
+            const response = await fetch('/api/refresh-kb', { method: 'POST' });
+            const data = await response.json();
+
+            if (response.ok) {
+                showAlert(data.message, 'success');
+            } else {
+                throw new Error(data.detail || 'Refresh Failed');
+            }
+        } catch (error) {
+            showAlert(error.message, 'error');
+        } finally {
+            refreshKbBtn.disabled = false;
+            refreshKbBtn.classList.remove('syncing');
+        }
+    });
+
     xmlUpload.addEventListener('change', () => {
         const file = xmlUpload.files[0];
         if (file) {

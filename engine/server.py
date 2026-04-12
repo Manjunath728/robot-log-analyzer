@@ -88,6 +88,13 @@ def clean_llm_json(text: str) -> str:
         text = re.sub(r'\s*```$', '', text)
     return text.strip()
 
+@app.post("/api/refresh-kb")
+async def refresh_kb():
+    """Trigger a manual refresh/sync of the Knowledge Base."""
+    logger.info("Manual KB Refresh requested via UI.")
+    sync_kb_sources()
+    return {"status": "success", "message": "Knowledge Base successfully synchronized."}
+
 @app.get("/")
 def serve_index():
     return FileResponse("ui/index.html")

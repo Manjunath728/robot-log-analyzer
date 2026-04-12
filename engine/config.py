@@ -15,7 +15,8 @@ NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 
 # LLM
-LLM_DEBUG = os.getenv("LLM_DEBUG", "false").lower() == "true"
+_llm_enabled_raw = os.getenv("LLM_ENABLED", os.getenv("LLM_DEBUG", "false")).lower()
+LLM_ENABLED = _llm_enabled_raw == "true"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "x-ai/grok-4.20")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")

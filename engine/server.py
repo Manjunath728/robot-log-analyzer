@@ -19,7 +19,7 @@ from langchain_openai import ChatOpenAI
 
 from engine.config import (
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD,
-    EMBEDDING_MODEL, LLM_DEBUG, OPENROUTER_API_KEY,
+    EMBEDDING_MODEL, LLM_ENABLED, OPENROUTER_API_KEY,
     LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE,
     KB_REPOS
 )
@@ -52,10 +52,18 @@ def sync_kb_generator():
                 
                 if os.path.exists(target_path):
                     yield json.dumps({"type": "status", "message": f"[*] Repository {repo_source} exists. Pulling latest..."}) + "\n"
-                    subprocess.run(["git", "-C", target_path, "pull"], check=False)
+                    try:
+                        subprocess.run(["git", "-C", target_path, "pull"], check=False, timeout=60, capture_output=True)
+                    except subprocess.TimeoutExpired:
+                        yield json.dumps({"type": "error", "message": f"⏳ Git pull timed out (60s): {repo_source}"}) + "\n"
+                        continue
                 else:
                     yield json.dumps({"type": "status", "message": f"[*] Cloning repository {repo_source}..."}) + "\n"
-                    subprocess.run(["git", "clone", repo_source, target_path], check=False)
+                    try:
+                        subprocess.run(["git", "clone", repo_source, target_path], check=False, timeout=120, capture_output=True)
+                    except subprocess.TimeoutExpired:
+                        yield json.dumps({"type": "error", "message": f"⏳ Git clone timed out (120s): {repo_source}"}) + "\n"
+                        continue
             
             if os.path.exists(target_path):
                 yield json.dumps({"type": "status", "message": f"[*] Parsing & Mapping logic from: {target_path}..."}) + "\n"
@@ -247,8 +255,8 @@ Include these sections:
 4. **Final Recommendations**
 ===============================================
 """
-                if LLM_DEBUG:
-                    logger.info(f"LLM_DEBUG is TRUE. Invoking actual LLM ({LLM_MODEL})...")
+                if LLM_ENABLED:
+                    logger.info(f"LLM_ENABLED is TRUE. Invoking actual LLM ({LLM_MODEL})...")
                     try:
                         llm = ChatOpenAI(
                             model=LLM_MODEL,
@@ -257,12 +265,12 @@ Include these sections:
                             temperature=LLM_TEMPERATURE,
                         )
                         response = llm.invoke(prompt)
-                        rca_text = response.content
+                        rca_text = clean_llm_json(response.content)
                     except Exception as e:
                         logger.error(f"LLM Invocation Failed: {str(e)}")
                         rca_text = f"AI Evaluation failed: {str(e)}"
                 else:
-                    logger.info("LLM_DEBUG is FALSE. Returning raw prompt for audit.")
+                    logger.info("LLM_ENABLED is FALSE. Returning raw prompt for audit.")
                     rca_text = prompt
                     
                 try:

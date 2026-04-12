@@ -6,7 +6,8 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+      # Hardcoded because env_file is removed. Ensure this matches your .env NEO4J_PASSWORD
+      - NEO4J_AUTH=neo4j/password
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_memory_pagecache_size=512M
     # Removed env_file: .env to prevent Neo4j from crashing on unknown APP variables (like NEO4J_URI)

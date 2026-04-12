@@ -8,7 +8,8 @@ langchain-openai
 langchain-neo4j
 robotframework>=6.0
 fastapi
-uvicorn
+uvicorn[standard]
+httpx
 pydantic
 python-multipart
 python-dotenv

@@ -34,9 +34,14 @@ def bootstrap_schema(graph: Neo4jGraph):
         except Exception as e:
             logger.warning(f"Schema Command failed: {e}")
 
+def clear_kb_topology(graph: Neo4jGraph):
+    """Wipe only the TestCases and Keywords, preserving PastFailure memory."""
+    logger.info("[*] Wiping current KB topology (Tests & Keywords)...")
+    graph.query("MATCH (n) WHERE n:TestCase OR n:Keyword DETACH DELETE n")
+
 def clear_db(graph: Neo4jGraph):
-    """Wipe the current Knowledge Base topology."""
-    logger.info("[*] Wiping previous Graph topology...")
+    """Full Database Reset: Wipe everything including historical memory."""
+    logger.info("[!] PERFORMING FULL DATABASE RESET...")
     graph.query("MATCH (n) DETACH DELETE n")
 
 def load_repo_to_graph(graph: Neo4jGraph, repo_path: str):
@@ -77,12 +82,15 @@ def load_repo_to_graph(graph: Neo4jGraph, repo_path: str):
                 params={"parent": kw.name, "child": step}
             )
 
-def init_kb(repo_path: str):
-    """Standard CLI-based full initialization (Wipe + Load)."""
+def init_kb(repo_path: str, full_reset: bool = False):
+    """Standard CLI-based initialization."""
     try:
         graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
         bootstrap_schema(graph)
-        clear_db(graph)
+        if full_reset:
+            clear_db(graph)
+        else:
+            clear_kb_topology(graph)
         load_repo_to_graph(graph, repo_path)
         logger.info("[+] KB successfully mapped.")
     except Exception as e:
@@ -91,12 +99,13 @@ def init_kb(repo_path: str):
 def main():
     parser = argparse.ArgumentParser(description="Agentic Graph-RAG Engine CLI")
     parser.add_argument("--init-kb", type=str, help="Path to Robot repo to initialize Permanent Neo4j DB.")
+    parser.add_argument("--full-reset", action="store_true", help="Wipe ALL data including failure history before initialization.")
     args = parser.parse_args()
 
     if args.init_kb:
-        init_kb(args.init_kb)
+        init_kb(args.init_kb, full_reset=args.full_reset)
     else:
-        logger.info("Usage: python run.py --init-kb <path-to-robot-tests>")
+        logger.info("Usage: python run.py --init-kb <path-to-robot-tests> [--full-reset]")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.venv/
+
+# Environment Secrets
+.env
+
+# Temporary / Runtime
+temp_data/
+temp_output.xml
+
+# Robot Framework Output Artifacts
+output.xml
+log.html
+report.html
+
+# Neo4j Data (Docker managed)
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

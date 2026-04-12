@@ -1,0 +1,14 @@
+langchain
+langchain-community
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+neo4j
+langchain-openai
+langchain-neo4j
+robotframework>=6.0
+fastapi
+uvicorn
+pydantic
+python-multipart
+python-dotenv

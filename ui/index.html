@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic RAG Engine | Robot Framework</title>
+    <!-- Google Fonts: Outfit for premium typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- Abstract Background Orbs -->
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="glass-panel">
+            <div class="header-content">
+                <div class="logo">
+                    <i data-lucide="cpu" class="icon-glow"></i>
+                    <h1>Agentic <span>RAG</span> Engine</h1>
+                </div>
+                <div class="status-badge connected">
+                    <div class="pulse-dot"></div>
+                    <div>Neo4j Connected</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Input Section -->
+        <section class="input-section glass-panel">
+            <h2>Start Analysis Phase</h2>
+            <p>Deploy the specialized AI agent to cross-query your Permanent Test Graph and isolate the exact root cause
+                of runtime failures.</p>
+
+            <div class="input-group">
+                <i data-lucide="file-xml" class="input-icon"></i>
+                <label for="xml-upload" class="file-upload-label">
+                    <span id="file-name-display">Choose output.xml...</span>
+                    <input type="file" id="xml-upload" accept=".xml" hidden />
+                </label>
+                <button id="analyze-btn">
+                    <i data-lucide="zap"></i> Ignite RAG
+                </button>
+            </div>
+
+            <!-- Agentic Pipeline Log Hidden By Default -->
+            <div id="loader" class="agent-pipeline hidden">
+                <div class="pipeline-header">
+                    <i data-lucide="activity" class="pulse-icon"></i>
+                    <span>Agent Operations Log</span>
+                </div>
+                <ul id="pipeline-log" class="pipeline-log-list">
+                    <!-- Steps will be streamed here -->
+                </ul>
+            </div>
+
+            <!-- Status Alert -->
+            <div id="alert-box" class="alert hidden"></div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results-container" class="results-grid">
+            <!-- Cards appended here via JavaScript -->
+        </section>
+    </div>
+
+    <!-- JS -->
+    <script src="/static/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

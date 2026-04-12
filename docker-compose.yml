@@ -1,0 +1,18 @@
+services:
+  neo4j:
+    image: neo4j:5
+    restart: always
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    env_file:
+      - .env
+    environment:
+      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_memory_pagecache_size=512M
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  neo4j_data:

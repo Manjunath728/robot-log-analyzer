@@ -146,14 +146,13 @@ Analyze the failure based on the following retrieved contexts from our Vector Da
 [RUNTIME CRASH CONTEXT (FAISS MEMORY)]
 {exec_content}
 
-TASK: Analyze why '{failure.name}' broke. You must return your response STRICTLY as a JSON object (no other text) with the following exact keys:
-{
-  "root_cause": "Detailed explanation of the failure cause and expected behavior.",
-  "test_fix": "Markdown list of specific changes needed in the Robot test scripts.",
-  "system_bug": "Brief summary if this is a system/app bug, or null if it is a test issue.",
-  "confidence": "low/medium/high",
-  "recommendations": "Any further actions or context."
-}
+TASK: Analyze why '{failure.name}' broke. You must structure your output as a professional Root Cause Analysis report in Markdown. Use headers, bold text, and lists to make it readable.
+
+Include these sections:
+1. **Root Cause & Expected Behavior**
+2. **Proposed Test Fixes**
+3. **System Bug / Issue Analysis**
+4. **Final Recommendations**
 ===============================================
 """
                 if LLM_DEBUG:
@@ -166,19 +165,13 @@ TASK: Analyze why '{failure.name}' broke. You must return your response STRICTLY
                             temperature=LLM_TEMPERATURE,
                         )
                         response = llm.invoke(prompt)
-                        rca_text = clean_llm_json(response.content)
+                        rca_text = response.content
                     except Exception as e:
                         logger.error(f"LLM Invocation Failed: {str(e)}")
-                        rca_text = json.dumps({"root_cause": f"AI Evaluation failed: {str(e)}", "confidence": "none"})
+                        rca_text = f"AI Evaluation failed: {str(e)}"
                 else:
-                    logger.info("LLM_DEBUG is FALSE. Returning structured Mock JSON for audit.")
-                    rca_text = json.dumps({
-                        "root_cause": f"PROMPT AUDIT MODE: {failure.name} analysis context compiled internally.",
-                        "test_fix": "- Review the compiled prompt in the audit logs for context details.\n- Enable LLM_DEBUG to see AI-generated steps.",
-                        "system_bug": "Simulated check: System appears stable in debug mode.",
-                        "confidence": "high",
-                        "recommendations": "Check vector and graph logs for correctness of retrieved nodes."
-                    })
+                    logger.info("LLM_DEBUG is FALSE. Returning raw prompt for audit.")
+                    rca_text = prompt
                     
                 try:
                     write_query = """

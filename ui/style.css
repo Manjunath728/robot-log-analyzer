@@ -372,63 +372,32 @@ button:active {
 
 .rca-analysis {
     background: rgba(0,0,0,0.4);
-    padding: 0;
     border-radius: 12px;
     border: 1px solid rgba(102,252,241,0.1);
     position: relative;
     overflow: hidden;
 }
 
-/* Structured Segments */
-.rca-segment {
+.glass-inset {
+    background: rgba(0,0,0,0.3);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
     padding: 1.5rem;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
-.rca-segment:last-child {
-    border-bottom: none;
-}
-
+/* Structured Segments */
 .rca-segment-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     color: var(--primary);
     font-weight: 600;
-    margin-bottom: 0.8rem;
+    margin-bottom: 1.2rem;
     font-size: 0.95rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(102, 252, 241, 0.1);
+    padding-bottom: 0.5rem;
 }
-
-.rca-segment-header i {
-    width: 18px;
-    height: 18px;
-}
-
-.rca-fix-block {
-    background: rgba(102, 252, 241, 0.03);
-}
-
-.rca-bug-block {
-    background: rgba(244, 63, 94, 0.03);
-}
-
-.confidence-indicator {
-    position: absolute;
-    top: 1rem;
-    right: 1.5rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    background: rgba(0,0,0,0.6);
-}
-
-.confidence-high { color: #4ade80; border: 1px solid #4ade80; }
-.confidence-medium { color: #fbbf24; border: 1px solid #fbbf24; }
-.confidence-low { color: #f43f5e; border: 1px solid #f43f5e; }
 
 /* Markdown Rendering Styles inside RCA */
 .rca-content-text {

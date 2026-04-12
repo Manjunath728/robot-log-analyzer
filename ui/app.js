@@ -115,58 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.animationDelay = `${idx * 0.15}s`;
 
             const tagsHtml = f.tags.map(t => `<span class="tag">${t}</span>`).join('');
-            
-            // Try to parse RCA as JSON
-            let structured = null;
-            try {
-                if (f.rca.trim().startsWith('{')) {
-                    structured = JSON.parse(f.rca);
-                }
-            } catch (e) {
-                console.warn('RCA is not valid JSON, falling back to markdown', e);
-            }
-
-            let analysisHtml = '';
             const md = (text) => (window.marked ? marked.parse(text || '') : escapeHtml(text));
-
-            if (structured) {
-                const confClass = `confidence-${structured.confidence || 'medium'}`;
-                analysisHtml = `
-                    <div class="rca-analysis">
-                        <div class="confidence-indicator ${confClass}">${structured.confidence || 'medium'}</div>
-                        
-                        <div class="rca-segment">
-                            <div class="rca-segment-header"><i data-lucide="lightbulb"></i> Technical Insight</div>
-                            <div class="rca-content-text">${md(structured.root_cause)}</div>
-                        </div>
-
-                        <div class="rca-segment rca-fix-block">
-                            <div class="rca-segment-header"><i data-lucide="wrench"></i> Proposed Test Fix</div>
-                            <div class="rca-content-text">${md(structured.test_fix)}</div>
-                        </div>
-
-                        ${structured.system_bug ? `
-                        <div class="rca-segment rca-bug-block">
-                            <div class="rca-segment-header" style="color:var(--error)"><i data-lucide="bug"></i> System Bug Report</div>
-                            <div class="rca-content-text">${md(structured.system_bug)}</div>
-                        </div>
-                        ` : ''}
-
-                        <div class="rca-segment">
-                            <div class="rca-segment-header"><i data-lucide="info"></i> Recommendations</div>
-                            <div class="rca-content-text">${md(structured.recommendations)}</div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                // Fallback for legacy / raw markdown
-                analysisHtml = `
-                    <div class="rca-analysis" style="padding: 1.5rem">
-                        <div class="rca-segment-header"><i data-lucide="sparkles"></i> Agentic Analysis</div>
-                        <div class="rca-content-text">${md(f.rca)}</div>
-                    </div>
-                `;
-            }
 
             card.innerHTML = `
                 <div class="rca-header">
@@ -184,7 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <strong>Failed at:</strong> ${f.failed_keyword}<br>
                         <strong>Reason:</strong> ${f.error_message}
                     </div>
-                    ${analysisHtml}
+                    
+                    <div class="rca-analysis glass-inset">
+                        <div class="rca-segment-header"><i data-lucide="sparkles"></i> Agentic Root Cause Analysis</div>
+                        <div class="rca-content-text">${md(f.rca)}</div>
+                    </div>
                 </div>
             `;
             resultsContainer.appendChild(card);

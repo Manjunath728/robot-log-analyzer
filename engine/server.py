@@ -5,6 +5,7 @@ import time
 import uuid
 import re
 import subprocess
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile
@@ -72,10 +73,25 @@ def sync_kb_sources():
     for _ in sync_kb_generator():
         pass
 
+# Helper function to run a sync generator in a thread pool to avoid blocking the event loop
+async def wrap_sync_generator(gen):
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            # Shift the sync 'next(gen)' call to a thread
+            res = await loop.run_in_executor(None, next, gen)
+            yield res
+        except StopIteration:
+            break
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": f"Stream Error: {str(e)}"}) + "\n"
+            break
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Sync Knowledge Base
-    sync_kb_sources()
+    # Startup: Sync Knowledge Base in a background thread
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, sync_kb_sources)
     yield
     # Shutdown logic (if any) could go here
 
@@ -98,9 +114,10 @@ def clean_llm_json(text: str) -> str:
 
 @app.post("/api/refresh-kb")
 async def refresh_kb():
-    """Trigger a manual refresh/sync of the Knowledge Base with streaming status."""
+    """Trigger a manual refresh/sync of the Knowledge Base with async-safe streaming."""
     logger.info("Manual KB Refresh requested via UI.")
-    return StreamingResponse(sync_kb_generator(), media_type="application/x-ndjson")
+    gen = sync_kb_generator()
+    return StreamingResponse(wrap_sync_generator(gen), media_type="application/x-ndjson")
 
 @app.get("/")
 def serve_index():
@@ -108,17 +125,21 @@ def serve_index():
 
 @app.post("/api/analyze")
 async def analyze_failures(file: UploadFile = File(...)):
+    # Eagerly read file content into memory asynchronously to avoid blocking
+    content = await file.read()
+    
     def event_stream():
         # Multi-user safe: unique filename per request
         unique_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
         temp_file_path = f"temp_data/output_{unique_id}.xml"
         
         logger.info(f"Incoming Request: File={file.filename}, TempPath={temp_file_path}")
-        yield json.dumps({"type": "status", "message": f"Receiving file: {file.filename}..."}) + "\n"
+        yield json.dumps({"type": "status", "message": f"Processing file: {file.filename}..."}) + "\n"
         
         try:
+            # Write bytes from memory to disk
             with open(temp_file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+                buffer.write(content)
             logger.info(f"File saved successfully: {temp_file_path}")
         except Exception as e:
             logger.error(f"Failed to save uploaded file: {str(e)}")
@@ -278,4 +299,6 @@ Include these sections:
                 except Exception as e:
                     logger.warning(f"Final cleanup failed for {temp_file_path}: {e}")
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    # Run the sync generator in a thread pool using the wrapper
+    gen = event_stream()
+    return StreamingResponse(wrap_sync_generator(gen), media_type="application/x-ndjson")

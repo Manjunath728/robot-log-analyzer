@@ -18,6 +18,7 @@ from engine.config import (
 )
 from engine.parser import parse_output_xml
 from engine.helpers import failure_to_doc
+from engine.logger import logger
 
 app = FastAPI(title="Agentic RAG Engine")
 
@@ -30,8 +31,6 @@ app.mount("/static", StaticFiles(directory="ui"), name="static")
 def serve_index():
     return FileResponse("ui/index.html")
 
-
-
 @app.post("/api/analyze")
 async def analyze_failures(file: UploadFile = File(...)):
     def event_stream():
@@ -39,42 +38,53 @@ async def analyze_failures(file: UploadFile = File(...)):
         unique_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
         temp_file_path = f"temp_data/output_{unique_id}.xml"
         
+        logger.info(f"Incoming Request: File={file.filename}, TempPath={temp_file_path}")
         yield json.dumps({"type": "status", "message": f"Receiving file: {file.filename}..."}) + "\n"
         
         try:
             with open(temp_file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
+            logger.info(f"File saved successfully: {temp_file_path}")
         except Exception as e:
+            logger.error(f"Failed to save uploaded file: {str(e)}")
             yield json.dumps({"type": "error", "message": f"Failed to save uploaded file: {str(e)}"}) + "\n"
             return
             
         try:
+            logger.info("Parsing XML output...")
             yield json.dumps({"type": "status", "message": f"Parsing XML output '{file.filename}'..."}) + "\n"
             try:
                 failures = parse_output_xml(temp_file_path)
             except Exception as e:
+                logger.error(f"XML Parsing Error: {str(e)}")
                 yield json.dumps({"type": "error", "message": f"Error parsing XML: {str(e)}"}) + "\n"
                 return
 
             if not failures:
+                logger.info("Analysis complete: All Tests Passed.")
                 yield json.dumps({"type": "done", "message": "All Tests Passed!"}) + "\n"
                 return
 
+            logger.info(f"Detected {len(failures)} failed tests. Connecting to Graph/Embedding DBs...")
             yield json.dumps({"type": "status", "message": f"Found {len(failures)} failed tests. Initializing DB connections..."}) + "\n"
 
             try:
                 robot_graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
                 embedding = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+                logger.info("✓ Connected to Neo4j and Embedding engine.")
                 yield json.dumps({"type": "status", "message": "✓ Connected to Neo4j Graph DB & Embeddings Model."}) + "\n"
             except Exception as e:
+                logger.error(f"DB Connection Failed: {str(e)}")
                 yield json.dumps({"type": "error", "message": f"Database/Embedding connection failed: {str(e)}"}) + "\n"
                 return
 
+            logger.info("Initializing Short-term Flow Memory (FAISS)...")
             yield json.dumps({"type": "status", "message": "Embedding trace logs into temporary FAISS memory..."}) + "\n"
             failure_docs = [failure_to_doc(f) for f in failures]
             temp_failure_db = FAISS.from_documents(failure_docs, embedding)
 
             for failure in failures:
+                logger.info(f"Analyzing Failure: {failure.name}")
                 yield json.dumps({"type": "status", "message": f"► [Test: {failure.name}] Resolving Keyword Traversal Graph..."}) + "\n"
                 
                 cypher_query = """
@@ -88,6 +98,7 @@ async def analyze_failures(file: UploadFile = File(...)):
                 graph_results = robot_graph.query(cypher_query, params={"test_name": failure.name})
                 
                 if not graph_results:
+                    logger.warning(f"Metadata missing for {failure.name} in Graph DB.")
                     expected_content = f"Test Case '{failure.name}' not found in Static Neo4j Knowledge Graph."
                 else:
                     data = graph_results[0]
@@ -99,15 +110,16 @@ async def analyze_failures(file: UploadFile = File(...)):
                     
                     past_fails = data.get('past_failures', [])
                     if past_fails and any(pf.get('error') for pf in past_fails):
+                        logger.info(f"Retrieved {len(past_fails)} past failure records for {failure.name}.")
                         past_str = "\n\n".join([f"Time: {pf.get('date', 'Unknown')}\nError: {pf.get('error')}\nPrevious RCA: {pf.get('rca', '')}" for pf in past_fails if pf.get('error')])
                         expected_content += f"\n\n[PAST FAILURES MEMORY]\nThe following are previous recorded failures for this exact same test case. Use them to understand if this is a recurring issue or if past fixes failed.\n\n{past_str}"
 
                 yield json.dumps({"type": "status", "message": f"► [Test: {failure.name}] Fetching Vector Context Memory..."}) + "\n"
-                # Remove the hard filter to allow vector cross-pollination of systemic identical failures across the repo
                 search_query = f"Keyword mapping failure '{failure.failed_keyword}' yielding '{failure.failed_keyword_message}'."
                 exec_results = temp_failure_db.similarity_search(search_query, k=4)
                 exec_content = "\n\n---\n\n".join([f"[SIMILAR RUNTIME CRASH LOG: {doc.metadata.get('test', 'Unknown')}]\n{doc.page_content}" for doc in exec_results])
 
+                logger.info(f"Context compiled for {failure.name}. Ready for inference.")
                 yield json.dumps({"type": "status", "message": f"⚡ [Test: {failure.name}] Initiating Agentic RCA Inference..."}) + "\n"
 
                 prompt = f"""
@@ -129,11 +141,7 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
 4. **Recommendations / Context**: Any further actions required, missing variables, or confidence metrics.
 ===============================================
 """
-                # TODO: Enable LLM inference when ready
-                # from langchain_openai import ChatOpenAI
-                # from engine.config import OPENROUTER_API_KEY, LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE
-                # llm = ChatOpenAI(model=LLM_MODEL, api_key=OPENROUTER_API_KEY, base_url=LLM_BASE_URL, temperature=LLM_TEMPERATURE)
-                # rca_text = llm.invoke(prompt).content
+                # Bypass LLM strictly to route Context Engine directly to UI for debugging
                 rca_text = prompt
                     
                 try:
@@ -151,8 +159,10 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
                         "error_msg": failure.failed_keyword_message,
                         "rca": rca_text
                     })
+                    logger.info(f"Analysis saved to Graph Memory for {failure.name}")
                     yield json.dumps({"type": "status", "message": f"💾 Saved LLM Analysis to Permanent Graph Memory."}) + "\n"
                 except Exception as e:
+                    logger.error(f"Failed to save to graph memory: {str(e)}")
                     yield json.dumps({"type": "error", "message": f"Failed to save to graph memory: {str(e)}"}) + "\n"
                     
                 yield json.dumps({
@@ -166,12 +176,14 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
                     }
                 }) + "\n"
 
+            logger.info("Full analysis pipeline finished.")
             yield json.dumps({"type": "done", "message": "Analysis Pipeline Completed successfully!"}) + "\n"
         finally:
             if os.path.exists(temp_file_path):
                 try:
                     os.remove(temp_file_path)
-                except Exception:
-                    pass
+                    logger.info(f"Cleaned up temp file: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"Final cleanup failed for {temp_file_path}: {e}")
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")

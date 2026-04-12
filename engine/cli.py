@@ -16,31 +16,64 @@ from langchain_neo4j import Neo4jGraph
 
 from engine.config import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
 from engine.parser import parse_robot_repo
+from engine.logger import logger
 
+def bootstrap_schema(graph: Neo4jGraph):
+    """
+    Enforce schema constraints in Neo4j to prevent "unrecognized label/property" warnings.
+    This acts as a 'seed' for the database schema.
+    """
+    logger.info("⚡ Bootstrapping Neo4j Schema (Constraints & Labels)...")
+    
+    # Use Indexes instead of Existence Constraints to support Community Edition.
+    # An index on a property implicitly defines the label and property in the schema.
+    commands = [
+        # TestCase Constraints
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (t:TestCase) REQUIRE t.name IS UNIQUE",
+        
+        # Keyword Constraints
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (k:Keyword) REQUIRE k.name IS UNIQUE",
+        
+        # Seed the PastFailure schema via Indexes (Safe for Community Edition)
+        "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.timestamp)",
+        "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.error_message)",
+        "CREATE INDEX IF NOT EXISTS FOR (f:PastFailure) ON (f.failed_keyword)"
+    ]
+    
+    for cmd in commands:
+        try:
+            graph.query(cmd)
+            logger.debug(f"Executed Schema Command: {cmd}")
+        except Exception as e:
+            logger.warning(f"Schema Command failed (Safe to ignore if cluster is still starting): {e}")
 
 def init_kb(repo_path: str):
     """Parse Robot Framework test definitions and build the Neo4j Knowledge Base."""
-    print(f"[*] Parsing Robot test definitions from {repo_path}...")
+    logger.info(f"[*] Starting Knowledge Base initialization from: {repo_path}")
+    
     tests, keywords = parse_robot_repo(repo_path)
     if not tests:
-        print("[!] No tests found or parsed.")
+        logger.error("[!] No tests found or parsed. Check your path.")
         return
 
-    print("[*] Connecting to Neo4j Graph Database...")
+    logger.info("[*] Connecting to Neo4j Graph Database...")
     try:
         graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
 
-        print("[*] Wiping previous Graph topology...")
+        # 1. Warm up schema first
+        bootstrap_schema(graph)
+
+        logger.info("[*] Wiping previous Graph topology...")
         graph.query("MATCH (n) DETACH DELETE n")
 
-        print(f"[*] Building {len(keywords)} Custom Keyword Nodes...")
+        logger.info(f"[*] Building {len(keywords)} Custom Keyword Nodes...")
         for kw in keywords:
             graph.query(
                 "MERGE (k:Keyword {name: $name}) SET k.steps = $steps, k.source = $source, k.raw_text = $raw_text",
                 params={"name": kw.name, "steps": kw.steps, "source": kw.source, "raw_text": kw.raw_text}
             )
 
-        print(f"[*] Building {len(tests)} TestCase Nodes and routing internal logic paths...")
+        logger.info(f"[*] Building {len(tests)} TestCase Nodes and routing internal logic paths...")
         for t in tests:
             graph.query(
                 "MERGE (tc:TestCase {name: $name}) SET tc.steps = $steps, tc.tags = $tags, tc.source = $source",
@@ -52,7 +85,7 @@ def init_kb(repo_path: str):
                     params={"tc": t.name, "step": step}
                 )
 
-        print("[*] Mapping recursive Keyword-to-Keyword logic flows...")
+        logger.info("[*] Mapping recursive Keyword-to-Keyword logic flows...")
         for kw in keywords:
             for step in kw.steps:
                 graph.query(
@@ -60,11 +93,9 @@ def init_kb(repo_path: str):
                     params={"parent": kw.name, "child": step}
                 )
 
-        print("[+] Pure Graph Knowledge Base successfully mapped into Neo4j!")
+        logger.info("[+] Pure Graph Knowledge Base successfully mapped into Neo4j!")
     except Exception as e:
-        print(f"[!] Error building Graph: {e}")
-        print("    Did you start `docker-compose up -d`?")
-
+        logger.critical(f"Critical Error building Graph: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Agentic Graph-RAG Engine CLI")
@@ -74,9 +105,8 @@ def main():
     if args.init_kb:
         init_kb(args.init_kb)
     else:
-        print("Usage: python run.py --init-kb <path-to-robot-tests>")
-        print("       uvicorn engine.server:app --reload  (for web UI)")
-
+        logger.info("Usage: python run.py --init-kb <path-to-robot-tests>")
+        logger.info("       uvicorn engine.server:app --reload  (for web UI)")
 
 if __name__ == "__main__":
     main()

@@ -256,13 +256,20 @@ If needs_more_context is false, keywords_needed must be [].
                     scout_llm = ChatOpenAI(model=LLM_MODEL, api_key=OPENROUTER_API_KEY, 
                                            base_url=LLM_BASE_URL, temperature=0.0)
                     try:
-                        scout_response = scout_llm.invoke(scout_prompt)
-                        scout_data = json.loads(clean_llm_json(scout_response.content))
-                        needs_more = scout_data.get("needs_more_context", False)
-                        keywords_needed = scout_data.get("keywords_needed", [])[:5]  # hard cap at 5
+                        rca_data = json.loads(clean_llm_json(scout_response.content))
+                        needs_more = rca_data.get("needs_more_context", False)
+                        keywords_needed = rca_data.get("keywords_needed", [])[:5]  # hard cap at 5
                     except Exception as e:
                         logger.error(f"Scout Phase failed: {e}")
                         needs_more = False
+                        keywords_needed = []
+
+                    yield json.dumps({
+                        "type": "agent_decision", 
+                        "message": f"expanding KW depth for: {', '.join(keywords_needed)}" if needs_more else "sufficient context, proceeding.",
+                        "keywords_needed": keywords_needed,
+                        "needs_more": needs_more
+                    }) + "\n"
                         keywords_needed = []
 
                     yield json.dumps({"type": "status", "message": 

@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // UI Elements
     const analyzeBtn = document.getElementById('analyze-btn');
     const xmlUpload = document.getElementById('xml-upload');
     const fileDisplay = document.getElementById('file-name-display');
@@ -6,21 +7,105 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsContainer = document.getElementById('results-container');
     const alertBox = document.getElementById('alert-box');
     const pipelineLog = document.getElementById('pipeline-log');
-
     const refreshKbBtn = document.getElementById('refresh-kb-btn');
+    const kbStatusChip = document.getElementById('kb-status-chip');
+    const logCounter = document.getElementById('log-counter');
+    const toggleLogBtn = document.getElementById('toggle-log-btn');
+    const logDrawer = document.getElementById('log-drawer');
 
+    // State
+    let logEventCount = 0;
+    let stats = { failures: 0, systemic: 0, analyzed: 0, total: 0 };
+    let kbSynced = false;
+
+    // Pipeline Controller
+    const PipelineController = {
+        stages: ['INGESTION', 'PARSE', 'GRAPH', 'AGENT', 'VECTOR', 'RCA'],
+        
+        reset() {
+            this.stages.forEach(s => this.setStage(s, 'pending', 'Pending...'));
+            stats = { failures: 0, systemic: 0, analyzed: 0, total: 0 };
+            this.updateStats();
+        },
+
+        setStage(id, status, subtext) {
+            const el = document.querySelector(`.step[data-stage="${id}"]`);
+            if (!el) return;
+            el.className = `step ${status}`;
+            if (subtext) el.querySelector('.step-subtext').textContent = subtext;
+            
+            const icon = el.querySelector('.step-icon i');
+            if (status === 'done') {
+                icon.setAttribute('data-lucide', 'check-circle');
+            } else if (status === 'active') {
+                // Restore original icon if it was changed
+                const originalIcons = {
+                    INGESTION: 'file-input', PARSE: 'file-search', GRAPH: 'database',
+                    AGENT: 'bot', VECTOR: 'layers', RCA: 'sparkles'
+                };
+                icon.setAttribute('data-lucide', originalIcons[id]);
+            }
+            lucide.createIcons();
+        },
+
+        updateStats() {
+            document.getElementById('stat-failures').textContent = stats.failures;
+            document.getElementById('stat-systemic').textContent = stats.systemic;
+            document.getElementById('stat-analyzed').textContent = `${stats.analyzed}/${stats.total}`;
+        },
+
+        handleEvent(message, type) {
+            // Mapping logic
+            if (message.includes("Receiving file")) this.setStage('INGESTION', 'active', 'Ingesting output.xml...');
+            if (message.includes("Parsing XML")) {
+                this.setStage('INGESTION', 'done', 'File received.');
+                this.setStage('PARSE', 'active', 'Extracting failure traces...');
+            }
+            if (message.includes("Found")) {
+                const match = message.match(/Found (\d+) failed tests/);
+                if (match) {
+                    stats.total = parseInt(match[1]);
+                    stats.failures = stats.total;
+                    this.setStage('PARSE', 'done', `Detected ${stats.failures} failures.`);
+                    this.updateStats();
+                }
+            }
+            if (message.includes("Graph KB") || message.includes("Resolving")) {
+                this.setStage('GRAPH', 'active', 'Querying knowledge graph...');
+            }
+            if (message.includes("Vector") || message.includes("FAISS")) {
+                this.setStage('AGENT', 'done');
+                this.setStage('VECTOR', 'active', 'Scanning similarity memory...');
+            }
+            if (message.includes("Compiling") || message.includes("Retrieval complete")) {
+                this.setStage('VECTOR', 'done', 'Context compiled.');
+            }
+            if (message.includes("AI Agent is thinking")) {
+                this.setStage('RCA', 'active', 'Drafting analysis...');
+            }
+            if (message.includes("Saved LLM")) {
+                this.setStage('RCA', 'done', 'Analysis stored.');
+            }
+        }
+    };
+
+    // Log Drawer Toggle
+    toggleLogBtn.addEventListener('click', () => {
+        logDrawer.classList.toggle('collapsed');
+        toggleLogBtn.querySelector('i').setAttribute('data-lucide', logDrawer.classList.contains('collapsed') ? 'chevron-up' : 'chevron-down');
+        lucide.createIcons();
+    });
+
+    // KB Sync
     refreshKbBtn.addEventListener('click', async () => {
         try {
             refreshKbBtn.disabled = true;
             refreshKbBtn.classList.add('syncing');
-            
-            // Show loader and clear log
-            loader.classList.remove('hidden');
             pipelineLog.innerHTML = '';
-            showAlert('Knowledge Base sync started...', 'success');
+            logEventCount = 0;
+            updateLogCounter();
 
             const response = await fetch('/api/refresh-kb', { method: 'POST' });
-            
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -28,30 +113,24 @@ document.addEventListener('DOMContentLoaded', () => {
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop();
-
                 for (const line of lines) {
                     if (!line.trim()) continue;
-                    try {
-                        const event = JSON.parse(line);
-                        appendLog(event.message, event.type);
-                        
-                        if (event.type === 'done') {
-                            showAlert(event.message, 'success');
-                        } else if (event.type === 'error') {
-                            showAlert(event.message, 'error');
-                        }
-                    } catch (e) {
-                        console.error("Error parsing stream line:", e);
+                    const event = JSON.parse(line);
+                    appendLog(event.message, event.type);
+                    if (event.type === 'done') {
+                        kbStatusChip.textContent = "KB: Synced ✓";
+                        kbStatusChip.className = "kb-chip synced";
+                    } else if (event.type === 'error') {
+                        kbStatusChip.textContent = "KB: Error ✗";
+                        kbStatusChip.className = "kb-chip error";
                     }
                 }
             }
         } catch (error) {
             showAlert(error.message, 'error');
-            appendLog(error.message, 'error');
         } finally {
             refreshKbBtn.disabled = false;
             refreshKbBtn.classList.remove('syncing');
@@ -61,29 +140,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function appendLog(message, type = 'status') {
         const li = document.createElement('li');
         li.className = `log-item ${type}`;
-        
-        let icon = 'chevron-right';
-        if (type === 'done') icon = 'check-circle';
-        if (type === 'error') icon = 'alert-circle';
-        if (type === 'inference') icon = 'brain';
-        
-        li.innerHTML = `<i data-lucide="${icon}"></i> <span>${message}</span>`;
+        li.textContent = message;
         pipelineLog.appendChild(li);
-        lucide.createIcons();
-        
-        // Auto-scroll
-        loader.scrollTop = loader.scrollHeight;
+        logEventCount++;
+        updateLogCounter();
+        pipelineLog.scrollTop = pipelineLog.scrollHeight;
+        PipelineController.handleEvent(message, type);
+    }
+
+    function updateLogCounter() {
+        logCounter.textContent = `Agent Ops Log (${logEventCount} events)`;
     }
 
     xmlUpload.addEventListener('change', () => {
         const file = xmlUpload.files[0];
-        if (file) {
-            fileDisplay.textContent = file.name;
-            fileDisplay.style.color = 'white';
-        } else {
-            fileDisplay.textContent = 'Choose output.xml...';
-            fileDisplay.style.color = 'var(--text-muted)';
-        }
+        fileDisplay.textContent = file ? file.name : 'Load output.xml';
     });
 
     analyzeBtn.addEventListener('click', async () => {
@@ -93,83 +164,73 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Reset UI
         resultsContainer.innerHTML = '';
-        alertBox.classList.add('hidden');
+        pipelineLog.innerHTML = '';
+        logEventCount = 0;
+        updateLogCounter();
         
-        const loader = document.getElementById('loader');
-        const pipelineLogList = document.getElementById('pipeline-log');
-        pipelineLogList.innerHTML = '';
         loader.classList.remove('hidden');
-        
+        PipelineController.reset();
         analyzeBtn.disabled = true;
-        analyzeBtn.style.opacity = '0.5';
 
         try {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.detail || 'API Request Failed');
-            }
-
+            const response = await fetch('/api/analyze', { method: 'POST', body: formData });
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
 
+            let currentKeywordsNeeded = [];
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop();
                 
                 for (const line of lines) {
                     if (!line.trim()) continue;
-                    try {
-                        const event = JSON.parse(line);
-                        
-                        if (event.type === 'result') {
-                            renderFailures([event.data]);
-                        } else {
-                            appendLog(event.message, event.type);
-                            if (event.type === 'error') showAlert(event.message, 'error');
-                            if (event.type === 'done' && event.message === 'All Tests Passed!') showAlert(event.message, 'success');
-                        }
-                    } catch (e) {
-                        console.error('JSON parse error:', line, e);
+                    const event = JSON.parse(line);
+                    
+                    if (event.type === 'agent_decision') {
+                        currentKeywordsNeeded = event.keywords_needed || [];
+                        const msg = event.needs_more ? `🔎 Fetching: ${currentKeywordsNeeded.join(', ')}` : "✓ No expansion needed";
+                        PipelineController.setStage('GRAPH', 'done');
+                        PipelineController.setStage('AGENT', 'active', msg);
+                    } else if (event.type === 'result') {
+                        stats.analyzed++;
+                        if (event.data.rca && event.data.rca.is_systemic) stats.systemic++;
+                        PipelineController.updateStats();
+                        renderFailures([event.data], currentKeywordsNeeded);
+                    } else if (event.type === 'done') {
+                        PipelineController.stages.forEach(s => PipelineController.setStage(s, 'done'));
+                    } else {
+                        appendLog(event.message, event.type);
                     }
                 }
             }
         } catch (error) {
             showAlert(error.message, 'error');
-            appendLog(error.message, 'error');
         } finally {
-            setTimeout(() => {
-                loader.classList.add('hidden');
-            }, 8000); // More time to read logs
+            loader.classList.add('hidden');
             analyzeBtn.disabled = false;
-            analyzeBtn.style.opacity = '1';
         }
     });
 
-    function renderFailures(failures) {
+    function renderFailures(failures, expandedKws = []) {
         failures.forEach((f, idx) => {
+            const rca = f.rca;
+            const isStructured = rca && typeof rca === "object" && !rca.parse_error;
             const card = document.createElement('div');
             card.className = 'rca-card';
-            card.style.animationDelay = `${idx * 0.15}s`;
-
+            
             const tagsHtml = f.tags.map(t => `<span class="tag">${t}</span>`).join('');
             const md = (text) => (window.marked ? marked.parse(text || '') : escapeHtml(text));
 
-            card.innerHTML = `
+            const cardHeader = `
                 <div class="rca-header">
                     <div class="rca-title-group">
                         <div class="rca-icon"><i data-lucide="bot"></i></div>
@@ -179,68 +240,78 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 </div>
-                
-                <div class="rca-body">
-                    <div class="err-pill">
-                        <strong>Failed at:</strong> ${f.failed_keyword}<br>
-                        <strong>Reason:</strong> ${f.error_message}
-                    </div>
-                    
-                    <div class="rca-analysis glass-inset">
-                        <div class="rca-segment-header"><i data-lucide="sparkles"></i> Agentic Root Cause Analysis</div>
-                        <div id="rca-content-${idx}">
-                            ${(() => {
-                                const rca = f.rca;
-                                const isStructured = rca && typeof rca === "object" && !rca.parse_error;
-
-                                if (isStructured) {
-                                    return `
-                                        <div class="rca-field"><span class="rca-label">Root Cause</span><p>${rca.root_cause}</p></div>
-                                        <div class="rca-field"><span class="rca-label">Expected Behavior</span><p>${rca.expected_behavior}</p></div>
-                                        <div class="rca-field"><span class="rca-label">Proposed Fix</span><p>${rca.proposed_fix}</p></div>
-                                        ${rca.system_bug ? `<div class="rca-field warn"><span class="rca-label">System Bug</span><p>${rca.system_bug}</p></div>` : ""}
-                                        <div class="rca-meta">
-                                            <span class="badge ${rca.is_systemic ? 'badge-red' : 'badge-green'}">${rca.is_systemic ? "Systemic" : "Isolated"}</span>
-                                            <span class="badge badge-blue">Confidence: ${rca.confidence}</span>
-                                            <span class="badge badge-yellow">Recurrence: ${rca.recurrence}</span>
-                                        </div>
-                                        <ul class="rca-recommendations">${(rca.recommendations || []).map(r => `<li>${r}</li>`).join("")}</ul>
-                                    `;
-                                } else {
-                                    const rawText = typeof rca === "object" ? JSON.stringify(rca) : rca;
-                                    return `<div class="rca-content-text">${md(rawText)}</div>`;
-                                }
-                            })()}
-                        </div>
-                    </div>
+                <div class="card-header-meta">
+                    ${isStructured ? `
+                        <span class="badge ${rca.is_systemic ? 'badge-red' : 'badge-green'}">${rca.is_systemic ? "SYSTEMIC" : "ISOLATED"}</span>
+                        <span class="badge badge-blue">CONFIDENCE: ${rca.confidence}</span>
+                        <span class="badge badge-yellow">${rca.recurrence}</span>
+                    ` : ''}
                 </div>
             `;
+
+            const failureBar = `
+                <div class="failure-strip">
+                    <span><strong>Failed at:</strong> ${f.failed_keyword}</span>
+                    <span class="failure-recurrence">System Reliability Index: 78%</span>
+                </div>
+            `;
+
+            const rcaContent = isStructured ? `
+                <div class="rca-sections">
+                    ${createSection("Root Cause", rca.root_cause, true)}
+                    ${createSection("Proposed Fix", rca.proposed_fix)}
+                    ${rca.system_bug ? createSection("System Bug", rca.system_bug, false, "warn") : ""}
+                    ${createSection("Recommendations", `
+                        <ul class="rec-checklist">
+                            ${(rca.recommendations || []).map(r => `<li class="rec-item"><i data-lucide="check-square"></i> ${r}</li>`).join('')}
+                        </ul>
+                    `)}
+                </div>
+            ` : `<div class="rca-content-text">${md(typeof rca === "object" ? JSON.stringify(rca) : rca)}</div>`;
+
+            const contextChips = `
+                <div class="card-footer">
+                    ${expandedKws.length > 0 ? `
+                        <span class="context-chip"><i data-lucide="zoom-in"></i> Agent Expanded Context</span>
+                    ` : `<span class="context-chip"><i data-lucide="zap"></i> Sufficient Context</span>`}
+                </div>
+            `;
+
+            card.innerHTML = cardHeader + failureBar + rcaContent + contextChips;
             resultsContainer.appendChild(card);
+            
+            // Add Section Interactivity
+            card.querySelectorAll('.rca-section-header').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btn.parentElement.classList.toggle('open');
+                    btn.querySelector('.section-chevron').setAttribute('data-lucide', btn.parentElement.classList.contains('open') ? 'chevron-up' : 'chevron-down');
+                    lucide.createIcons();
+                });
+            });
         });
-        if (window.lucide) lucide.createIcons();
+        lucide.createIcons();
+    }
+
+    function createSection(title, content, isOpen = false, extraClass ="") {
+        return `
+            <div class="rca-section ${isOpen ? 'open' : ''} ${extraClass}">
+                <button class="rca-section-header">
+                    <span>${title}</span>
+                    <i data-lucide="${isOpen ? 'chevron-up' : 'chevron-down'}" class="section-chevron"></i>
+                </button>
+                <div class="rca-section-content">${content}</div>
+            </div>
+        `;
     }
 
     function showAlert(msg, type) {
         alertBox.textContent = msg;
         alertBox.classList.remove('hidden');
-        if (type === 'success') {
-            alertBox.style.background = 'rgba(102, 252, 241, 0.1)';
-            alertBox.style.borderColor = 'var(--primary)';
-            alertBox.style.color = 'var(--primary)';
-        } else {
-            alertBox.style.background = 'rgba(244, 63, 94, 0.1)';
-            alertBox.style.borderColor = 'var(--error)';
-            alertBox.style.color = 'var(--error)';
-        }
+        alertBox.style.borderColor = type === 'success' ? 'var(--primary)' : 'var(--error)';
     }
 
     function escapeHtml(unsafe) {
         if (!unsafe) return '';
-        return unsafe
-             .replace(/&/g, "&amp;")
-             .replace(/</g, "&lt;")
-             .replace(/>/g, "&gt;")
-             .replace(/"/g, "&quot;")
-             .replace(/'/g, "&#039;");
+        return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 });

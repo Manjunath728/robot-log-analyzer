@@ -305,13 +305,18 @@ Analyze the failure based on the following retrieved contexts from our Vector Da
 [RUNTIME CRASH CONTEXT (FAISS MEMORY)]
 {exec_content}
 
-TASK: Analyze why '{failure.name}' broke. You must structure your output as a professional Root Cause Analysis report in Markdown. Use headers, bold text, and lists to make it readable.
-
-Include these sections:
-1. **Root Cause & Expected Behavior**
-2. **Proposed Test Fixes**
-3. **System Bug / Issue Analysis**
-4. **Final Recommendations**
+TASK: Analyze why '{failure.name}' failed. Respond ONLY with a valid JSON object. No markdown fences, no explanation outside the JSON.
+Schema:
+{{
+  "root_cause": "one sentence describing the exact technical cause",
+  "expected_behavior": "what the keyword/test was supposed to do",
+  "proposed_fix": "specific code or config change to fix the test",
+  "system_bug": "underlying application bug if any, else null",
+  "is_systemic": true or false based on whether multiple tests share this failure,
+  "recurrence": "first_occurrence | recurring | chronic (>5 times)",
+  "confidence": "high | medium | low",
+  "recommendations": ["action item 1", "action item 2"]
+}}
 ===============================================
 """
                 if LLM_ENABLED:
@@ -324,13 +329,21 @@ Include these sections:
                             temperature=LLM_TEMPERATURE,
                         )
                         response = llm.invoke(prompt)
-                        rca_text = clean_llm_json(response.content)
+                        try:
+                            rca_data = json.loads(clean_llm_json(response.content))
+                            rca_text = json.dumps(rca_data)  # store canonical JSON string in Neo4j
+                        except (json.JSONDecodeError, ValueError):
+                            # LLM returned malformed JSON — store raw and flag it
+                            rca_data = {"root_cause": response.content, "parse_error": True}
+                            rca_text = json.dumps(rca_data)
                     except Exception as e:
                         logger.error(f"LLM Invocation Failed: {str(e)}")
-                        rca_text = f"AI Evaluation failed: {str(e)}"
+                        rca_data = {"root_cause": f"AI Evaluation failed: {str(e)}", "parse_error": True}
+                        rca_text = json.dumps(rca_data)
                 else:
                     logger.info("LLM_ENABLED is FALSE. Returning raw prompt for audit.")
-                    rca_text = prompt
+                    rca_data = {"root_cause": "LLM Disabled for Audit.", "prompt_audit": prompt}
+                    rca_text = json.dumps(rca_data)
                     
                 try:
                     write_query = """
@@ -362,7 +375,7 @@ Include these sections:
                         "test_name": failure.name,
                         "failed_keyword": failure.failed_keyword,
                         "error_message": failure.failed_keyword_message,
-                        "rca": rca_text,
+                        "rca": rca_data,
                         "tags": failure.tags
                     }
                 }) + "\n"

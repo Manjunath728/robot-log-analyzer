@@ -188,7 +188,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <div class="rca-analysis glass-inset">
                         <div class="rca-segment-header"><i data-lucide="sparkles"></i> Agentic Root Cause Analysis</div>
-                        <div class="rca-content-text">${md(f.rca)}</div>
+                        <div id="rca-content-${idx}">
+                            ${(() => {
+                                const rca = f.rca;
+                                const isStructured = rca && typeof rca === "object" && !rca.parse_error;
+
+                                if (isStructured) {
+                                    return `
+                                        <div class="rca-field"><span class="rca-label">Root Cause</span><p>${rca.root_cause}</p></div>
+                                        <div class="rca-field"><span class="rca-label">Expected Behavior</span><p>${rca.expected_behavior}</p></div>
+                                        <div class="rca-field"><span class="rca-label">Proposed Fix</span><p>${rca.proposed_fix}</p></div>
+                                        ${rca.system_bug ? `<div class="rca-field warn"><span class="rca-label">System Bug</span><p>${rca.system_bug}</p></div>` : ""}
+                                        <div class="rca-meta">
+                                            <span class="badge ${rca.is_systemic ? 'badge-red' : 'badge-green'}">${rca.is_systemic ? "Systemic" : "Isolated"}</span>
+                                            <span class="badge badge-blue">Confidence: ${rca.confidence}</span>
+                                            <span class="badge badge-yellow">Recurrence: ${rca.recurrence}</span>
+                                        </div>
+                                        <ul class="rca-recommendations">${(rca.recommendations || []).map(r => `<li>${r}</li>`).join("")}</ul>
+                                    `;
+                                } else {
+                                    const rawText = typeof rca === "object" ? JSON.stringify(rca) : rca;
+                                    return `<div class="rca-content-text">${md(rawText)}</div>`;
+                                }
+                            })()}
+                        </div>
                     </div>
                 </div>
             `;

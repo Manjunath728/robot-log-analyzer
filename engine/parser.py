@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import argparse
-import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Iterable, List, Tuple
 
 # Robot Framework imports with fallbacks for version differences.
 try:
@@ -86,13 +84,6 @@ def _walk_tests(suite: Any) -> Iterable[Any]:
         yield from _walk_tests(child_suite)
 
 
-def _walk_keywords(node: Any) -> Iterable[Any]:
-    """
-    Recursively yield keyword-like execution nodes from a Robot test/result node.
-    """
-    for item in _iter_children(node, "body"):
-        yield item
-        yield from _walk_keywords(item)
 
 
 def _keyword_name(item: Any) -> str:
@@ -344,78 +335,3 @@ def parse_output_xml(output_xml_path: str) -> List[FailedTest]:
         )
 
     return failures
-
-
-def build_context(
-    tests: List[RobotTest],
-    failures: List[FailedTest],
-) -> List[Dict[str, Any]]:
-    """
-    Join static test info with runtime failure info by name + source.
-    If source is missing in one side, match by name only.
-    """
-    test_map: Dict[Tuple[str, str], RobotTest] = {}
-    test_map_by_name: Dict[str, RobotTest] = {}
-
-    for t in tests:
-        key = (t.name.casefold(), t.source.casefold())
-        test_map[key] = t
-        if t.name.casefold() not in test_map_by_name:
-            test_map_by_name[t.name.casefold()] = t
-
-    merged: List[Dict[str, Any]] = []
-
-    for f in failures:
-        chosen: Optional[RobotTest] = None
-
-        if f.source:
-            chosen = test_map.get((f.name.casefold(), f.source.casefold()))
-        if chosen is None:
-            chosen = test_map_by_name.get(f.name.casefold())
-
-        merged.append(
-            {
-                "test_name": f.name,
-                "source": f.source or (chosen.source if chosen else ""),
-                "status": f.status,
-                "expected": asdict(chosen) if chosen else {},
-                "actual": asdict(f),
-                "root_cause_hint": {
-                    "failed_keyword": f.failed_keyword,
-                    "message": f.failed_keyword_message or f.message,
-                },
-            }
-        )
-
-    return merged
-
-
-def save_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Parse Robot Framework repo and output.xml into JSON.")
-    parser.add_argument("--repo", required=True, help="Path to Robot Framework repo or suite directory")
-    parser.add_argument("--report", required=True, help="Path to Robot Framework output.xml")
-    parser.add_argument("--outdir", default="robot_ai_out", help="Directory to write JSON files")
-    args = parser.parse_args()
-
-    outdir = Path(args.outdir)
-
-    tests, _ = parse_robot_repo(args.repo)
-    failures = parse_output_xml(args.report)
-    merged = build_context(tests, failures)
-
-    save_json(outdir / "tests.json", [asdict(t) for t in tests])
-    save_json(outdir / "failures.json", [asdict(f) for f in failures])
-    save_json(outdir / "merged_context.json", merged)
-
-    print(f"Parsed tests: {len(tests)}")
-    print(f"Failed tests: {len(failures)}")
-    print(f"Saved JSON to: {outdir.resolve()}")
-
-
-if __name__ == "__main__":
-    main()

@@ -3,8 +3,6 @@ import json
 import shutil
 import time
 import uuid
-from pathlib import Path
-from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -13,11 +11,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 from langchain_community.vectorstores import FAISS
 from langchain_neo4j import Neo4jGraph
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
 
 from engine.config import (
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD,
-    OPENROUTER_API_KEY, LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE,
     EMBEDDING_MODEL,
 )
 from engine.parser import parse_output_xml
@@ -73,13 +69,6 @@ async def analyze_failures(file: UploadFile = File(...)):
             except Exception as e:
                 yield json.dumps({"type": "error", "message": f"Database/Embedding connection failed: {str(e)}"}) + "\n"
                 return
-
-            llm = ChatOpenAI(
-                model=LLM_MODEL,
-                api_key=OPENROUTER_API_KEY or "DEBUG_KEY",
-                base_url=LLM_BASE_URL,
-                temperature=LLM_TEMPERATURE,
-            )
 
             yield json.dumps({"type": "status", "message": "Embedding trace logs into temporary FAISS memory..."}) + "\n"
             failure_docs = [failure_to_doc(f) for f in failures]
@@ -140,13 +129,12 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
 4. **Recommendations / Context**: Any further actions required, missing variables, or confidence metrics.
 ===============================================
 """
-                try:
-                    # Bypass LLM strictly to route Context Engine directly to UI for debugging
-                    # response = llm.invoke(prompt)
-                    # rca_text = response.content
-                    rca_text = "✨ PROMPT DEBUG MODE:\n\n" + prompt
-                except Exception as e:
-                    rca_text = f"API Evaluation failed: {str(e)}"
+                # TODO: Enable LLM inference when ready
+                # from langchain_openai import ChatOpenAI
+                # from engine.config import OPENROUTER_API_KEY, LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE
+                # llm = ChatOpenAI(model=LLM_MODEL, api_key=OPENROUTER_API_KEY, base_url=LLM_BASE_URL, temperature=LLM_TEMPERATURE)
+                # rca_text = llm.invoke(prompt).content
+                rca_text = prompt
                     
                 try:
                     write_query = """

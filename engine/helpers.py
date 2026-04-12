@@ -16,34 +16,6 @@ def extract_test_id(name: str) -> str:
     return match.group(1).upper() if match else ""
 
 
-def robot_to_doc(t: dict) -> Document:
-    """Convert a parsed test case dict into a LangChain Document for vector storage."""
-    name = t.get('name', '')
-    tags = t.get('tags', [])
-    steps = t.get('steps', [])
-    glossary = t.get('keyword_glossary', {})
-
-    if glossary:
-        glossary_str = "\n".join([f"- {k}: {' -> '.join(v)}" for k, v in glossary.items()])
-        glossary_section = f"\n\n[KEYWORD GLOSSARY]\n{glossary_str}"
-    else:
-        glossary_section = ""
-
-    content = f"""
-Test: {name}
-Tags: {' '.join(tags)}
-Expected Flow: {' -> '.join(steps)}{glossary_section}
-"""
-    return Document(
-        page_content=content.strip(),
-        metadata={
-            "test": name,
-            "test_id": extract_test_id(name),
-            "tags": " ".join(tags),
-        }
-    )
-
-
 def failure_to_doc(f_obj) -> Document:
     """Convert a FailedTest dataclass into a LangChain Document for vector storage."""
     f = asdict(f_obj)

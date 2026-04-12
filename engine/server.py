@@ -175,7 +175,10 @@ async def analyze_failures(file: UploadFile = File(...)):
 
             try:
                 robot_graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
-                embedding = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+                embedding = HuggingFaceEmbeddings(
+                    model_name=EMBEDDING_MODEL,
+                    encode_kwargs={"normalize_embeddings": True}
+                )
                 logger.info("✓ Connected to Neo4j and Embedding engine.")
                 yield json.dumps({"type": "status", "message": "✓ Connected to Neo4j Graph DB & Embeddings Model."}) + "\n"
             except Exception as e:

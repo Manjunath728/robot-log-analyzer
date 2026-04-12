@@ -10,7 +10,8 @@ To transform Robot Framework test results (`output.xml`) into deep, actionable r
 - **Inference**: OpenRouter (ChatOpenAI wrapper).
 
 ## Core Philosophy
-1. **Markdown-First**: The agent avoids complex JSON parsing in the backend for reports; it produces structured Markdown which the frontend renders directly.
-2. **Audit Logging**: Every step of the pipeline (Parsing -> Graph -> Vector -> AI) is logged to `logs/audit.log`.
-3. **Graph-Enhanced Logic**: Uses Neo4j to resolve keyword dependencies and "past failure" memory, providing the AI with much deeper context than vector search alone.
-4. **Production Grade**: No hardcoded secrets (uses `.env`), modular package structure (`engine/`), and Dockerized infrastructure.
+1. **Markdown-First Reporting**: The agent produces structured Markdown reports which the frontend renders directly via `marked.js`, avoiding fragile JSON parsing in the backend.
+2. **Automated KB Lifecycle**: The system uses a "Zero-Step" initialization. It automatically clones/pulls Git repositories and syncs the Knowledge Base on every startup.
+3. **Real-time Streaming**: Status updates, logs, and AI analysis results are streamed to the UI in real-time using `StreamingResponse`.
+4. **Graph-Enhanced Retrieval**: Uses Neo4j to resolve keyword dependencies and "past failure" memory, providing the AI with much deeper context than vector search alone.
+5. **Production Reliability**: Centralized Audit Logging (`logs/audit.log`), multi-user safe file processing (`temp_data/`), and clean environment configuration.

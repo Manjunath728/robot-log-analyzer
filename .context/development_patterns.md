@@ -1,23 +1,25 @@
 # Development Patterns & Gotchas
 
-This document contains critical implementation patterns for future development of the Agentic RAG Engine.
+This document contains critical implementation patterns for the Agentic RAG Engine.
 
 ## 1. Zero-Trust LLM Formatting
-The AI is instructed to output Markdown. When using Python f-strings for prompts, **double the curly braces** `{{` and `}}` if they are part of the instructions (e.g., example JSON or code blocks) to avoid `ValueError: Invalid format specifier`.
+The AI is instructed to output Markdown. When using Python f-strings for prompts, **double the curly braces** `{{` and `}}` if they are part of the instructions to avoid `ValueError: Invalid format specifier`.
 
-## 2. Markdown-First UI
-Do not attempt to parse complex JSON in the backend for RCA reports. The system is designed to pass an AI-generated Markdown string directly to the frontend. The frontend uses `marked.js` in `app.js` to render this safely and beautifully.
+## 2. Real-time Streaming Architecture
+The system uses `NDJSON` (Newline Delimited JSON) over `StreamingResponse`. 
+- **Backend**: Use `yield json.dumps(...) + "\n"`.
+- **Frontend**: **Crucial Pattern**: Fragmented network packets split JSON strings. Always use a `buffer` in `app.js` (see `while` loop logic) to collect characters until a `\n` is found before calling `JSON.parse()`. Failure to do this causes silent UI log failures during long AI inference phases.
 
-## 3. Schema Bootstrapping
-Neo4j requires "Schema Warmup" to avoid warnings about non-existent labels or properties on fresh clusters.
-- **Pattern**: During `cli.py:init_kb`, we execute `CREATE INDEX IF NOT EXISTS` for `PastFailure` and `Keyword` nodes.
-- **Limitation**: Always use `CREATE INDEX` instead of `CREATE CONSTRAINT REQUIRED` for property existence, as the latter is a Neo4j Enterprise-only feature.
+## 3. Automated Startup Lifecycle
+The server uses the FastAPI `lifespan` event to sync the Knowledge Base. 
+- **Pattern**: `sync_kb_sources()` clones/pulls any repos defined in `KB_REPOS`.
+- **Concurrency**: This runs before the server starts accepting traffic, ensuring that the first analysis request always sees the latest test code.
 
-## 4. Multi-User Safety
+## 4. UI Feedback States
+To avoid user anxiety during long AI calls:
+- **Status Type**: `inference` triggers a pulsating "Brain" icon and shimmer effect in the logs.
+- **Auto-scroll**: The `appendLog` function in `app.js` ensures the latest operation is always visible.
+
+## 5. Multi-User Safety
 All uploads are processed using a `unique_id` (timestamp + uuid) into the `temp_data/` folder.
-- **Cleanup**: The `server.py` analyze endpoint uses a `finally` block to ensure `output.xml` is deleted from the server immediately after analysis completes.
-
-## 5. Audit Logging
-Avoid `print()` in production modules. Use `from engine.logger import logger`.
-- **Level**: Controlled via `LOG_LEVEL` in `.env`.
-- **Audit Trail**: Everything is persisted to `logs/audit.log`, which is the first place an agent should check if the pipeline slows down or fails.
+- **Cleanup**: The `analyze` endpoint uses a `finally` block to ensure temporary XML files are deleted from the disk immediately after analysis.

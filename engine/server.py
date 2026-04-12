@@ -27,14 +27,17 @@ from engine.helpers import failure_to_doc
 from engine.logger import logger
 from engine.cli import bootstrap_schema, clear_db, load_repo_to_graph
 
-def sync_kb_sources():
-    """Automated startup sync: Clones/Pulls repos and loads them into Neo4j."""
-    logger.info("🚀 Starting Automated Knowledge Base Synchronization...")
+def sync_kb_generator():
+    """Generator for KB synchronization status updates."""
+    yield json.dumps({"type": "status", "message": "🚀 Starting Knowledge Base Synchronization..."}) + "\n"
     
     try:
         graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
         bootstrap_schema(graph)
+        yield json.dumps({"type": "status", "message": "⚡ Bootstrapping Neo4j Schema (Constraints & Labels)..."}) + "\n"
+        
         clear_db(graph)
+        yield json.dumps({"type": "status", "message": "[*] Wiping previous Graph topology..."}) + "\n"
         
         temp_repos_root = "temp_repos"
         os.makedirs(temp_repos_root, exist_ok=True)
@@ -42,27 +45,32 @@ def sync_kb_sources():
         for repo_source in KB_REPOS:
             target_path = repo_source
             
-            # Handle Git URLs
             if repo_source.startswith("http") or repo_source.startswith("git@"):
                 repo_name = re.sub(r'[^a-zA-Z0-9]', '_', repo_source.split('/')[-1])
                 target_path = os.path.join(temp_repos_root, repo_name)
                 
                 if os.path.exists(target_path):
-                    logger.info(f"[*] Repository {repo_source} exists. Pulling latest...")
+                    yield json.dumps({"type": "status", "message": f"[*] Repository {repo_source} exists. Pulling latest..."}) + "\n"
                     subprocess.run(["git", "-C", target_path, "pull"], check=False)
                 else:
-                    logger.info(f"[*] Cloning repository {repo_source}...")
+                    yield json.dumps({"type": "status", "message": f"[*] Cloning repository {repo_source}..."}) + "\n"
                     subprocess.run(["git", "clone", repo_source, target_path], check=False)
             
-            # Load into Graph
             if os.path.exists(target_path):
+                yield json.dumps({"type": "status", "message": f"[*] Parsing & Mapping logic from: {target_path}..."}) + "\n"
                 load_repo_to_graph(graph, target_path)
             else:
-                logger.warning(f"[!] Path/Repo not found: {target_path}")
+                yield json.dumps({"type": "error", "message": f"[!] Path/Repo not found: {target_path}"}) + "\n"
                 
-        logger.info("✅ Automated KB Synchronization Complete.")
+        yield json.dumps({"type": "done", "message": "✅ Knowledge Base Synchronization Complete."}) + "\n"
     except Exception as e:
-        logger.error(f"❌ Automated KB Sync failed: {e}")
+        logger.error(f"❌ KB Sync failed: {e}")
+        yield json.dumps({"type": "error", "message": f"❌ Synchronization failed: {str(e)}"}) + "\n"
+
+def sync_kb_sources():
+    """Legacy wrapper for startup sync (lifespan)."""
+    for _ in sync_kb_generator():
+        pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,10 +98,9 @@ def clean_llm_json(text: str) -> str:
 
 @app.post("/api/refresh-kb")
 async def refresh_kb():
-    """Trigger a manual refresh/sync of the Knowledge Base."""
+    """Trigger a manual refresh/sync of the Knowledge Base with streaming status."""
     logger.info("Manual KB Refresh requested via UI.")
-    sync_kb_sources()
-    return {"status": "success", "message": "Knowledge Base successfully synchronized."}
+    return StreamingResponse(sync_kb_generator(), media_type="application/x-ndjson")
 
 @app.get("/")
 def serve_index():

@@ -12,23 +12,64 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             refreshKbBtn.disabled = true;
             refreshKbBtn.classList.add('syncing');
-            showAlert('Synchronizing Knowledge Base... Please wait.', 'success');
+            
+            // Show loader and clear log
+            loader.classList.remove('hidden');
+            pipelineLog.innerHTML = '';
+            showAlert('Knowledge Base sync started...', 'success');
 
             const response = await fetch('/api/refresh-kb', { method: 'POST' });
-            const data = await response.json();
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
 
-            if (response.ok) {
-                showAlert(data.message, 'success');
-            } else {
-                throw new Error(data.detail || 'Refresh Failed');
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const event = JSON.parse(line);
+                        appendLog(event.message, event.type);
+                        
+                        if (event.type === 'done') {
+                            showAlert(event.message, 'success');
+                        } else if (event.type === 'error') {
+                            showAlert(event.message, 'error');
+                        }
+                    } catch (e) {
+                        console.error("Error parsing stream line:", e);
+                    }
+                }
             }
         } catch (error) {
             showAlert(error.message, 'error');
+            appendLog(error.message, 'error');
         } finally {
             refreshKbBtn.disabled = false;
             refreshKbBtn.classList.remove('syncing');
         }
     });
+
+    function appendLog(message, type = 'status') {
+        const li = document.createElement('li');
+        li.className = `log-item ${type}`;
+        
+        let icon = 'chevron-right';
+        if (type === 'done') icon = 'check-circle';
+        if (type === 'error') icon = 'alert-circle';
+        
+        li.innerHTML = `<i data-lucide="${icon}"></i> <span>${message}</span>`;
+        pipelineLog.appendChild(li);
+        lucide.createIcons();
+        
+        // Auto-scroll
+        loader.scrollTop = loader.scrollHeight;
+    }
 
     xmlUpload.addEventListener('change', () => {
         const file = xmlUpload.files[0];
@@ -76,61 +117,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
-            let buffer = '';
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
                 
-                buffer = lines.pop(); // Keep the string without trailing newline here
-
                 for (const line of lines) {
                     if (!line.trim()) continue;
                     try {
-                        handleStreamEvent(JSON.parse(line));
+                        const event = JSON.parse(line);
+                        
+                        if (event.type === 'result') {
+                            renderFailures([event.data]);
+                        } else {
+                            appendLog(event.message, event.type);
+                            if (event.type === 'error') showAlert(event.message, 'error');
+                            if (event.type === 'done' && event.message === 'All Tests Passed!') showAlert(event.message, 'success');
+                        }
                     } catch (e) {
                         console.error('JSON parse error:', line, e);
                     }
                 }
             }
-
-            if (buffer.trim()) {
-                try {
-                    handleStreamEvent(JSON.parse(buffer));
-                } catch (e) {}
-            }
-
         } catch (error) {
             showAlert(error.message, 'error');
+            appendLog(error.message, 'error');
         } finally {
             setTimeout(() => {
                 loader.classList.add('hidden');
-            }, 5000); // Give user time to see final steps
+            }, 8000); // More time to read logs
             analyzeBtn.disabled = false;
             analyzeBtn.style.opacity = '1';
         }
     });
-
-    function handleStreamEvent(event) {
-        const logList = document.getElementById('pipeline-log');
-        if (event.type === 'status' || event.type === 'error' || event.type === 'done') {
-            const li = document.createElement('li');
-            li.className = 'log-item';
-            if (event.type === 'error') li.classList.add('error');
-            if (event.type === 'done') li.classList.add('done');
-            li.textContent = event.message;
-            logList.appendChild(li);
-            logList.scrollTop = logList.scrollHeight; // Auto-scroll
-            
-            if (event.type === 'error') showAlert(event.message, 'error');
-            if (event.type === 'done' && event.message === 'All Tests Passed!') showAlert(event.message, 'success');
-        } else if (event.type === 'result') {
-            renderFailures([event.data]);
-        }
-    }
 
     function renderFailures(failures) {
         failures.forEach((f, idx) => {

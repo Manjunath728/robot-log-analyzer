@@ -34,18 +34,17 @@ document.addEventListener('DOMContentLoaded', () => {
             el.className = `step ${status}`;
             if (subtext) el.querySelector('.step-subtext').textContent = subtext;
             
-            const icon = el.querySelector('.step-icon i');
+            const iconContainer = el.querySelector('.step-icon');
             if (status === 'done') {
-                icon.setAttribute('data-lucide', 'check-circle');
+                iconContainer.innerHTML = '<i data-lucide="check-circle"></i>';
             } else if (status === 'active') {
-                // Restore original icon if it was changed
                 const originalIcons = {
                     INGESTION: 'file-input', PARSE: 'file-search', GRAPH: 'database',
                     AGENT: 'bot', VECTOR: 'layers', RCA: 'sparkles'
                 };
-                icon.setAttribute('data-lucide', originalIcons[id]);
+                iconContainer.innerHTML = `<i data-lucide="${originalIcons[id]}"></i>`;
             }
-            lucide.createIcons();
+            if (window.lucide) lucide.createIcons();
         },
 
         updateStats() {
@@ -55,13 +54,18 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         handleEvent(message, type) {
-            // Mapping logic
-            if (message.includes("Receiving file")) this.setStage('INGESTION', 'active', 'Ingesting output.xml...');
-            if (message.includes("Parsing XML")) {
+            // Robust Regex Mapping
+            const m = message.toLowerCase();
+            
+            if (m.includes("receiving file") || m.includes("uploading")) 
+                this.setStage('INGESTION', 'active', 'Ingesting output.xml...');
+                
+            if (m.includes("parsing xml")) {
                 this.setStage('INGESTION', 'done', 'File received.');
                 this.setStage('PARSE', 'active', 'Extracting failure traces...');
             }
-            if (message.includes("Found")) {
+            
+            if (m.includes("found")) {
                 const match = message.match(/Found (\d+) failed tests/);
                 if (match) {
                     stats.total = parseInt(match[1]);
@@ -70,21 +74,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.updateStats();
                 }
             }
-            if (message.includes("Graph KB") || message.includes("Resolving")) {
+            
+            if (m.includes("graph kb") || m.includes("resolving") || m.includes("connecting to graph")) {
                 this.setStage('GRAPH', 'active', 'Querying knowledge graph...');
             }
-            if (message.includes("Vector") || message.includes("FAISS")) {
+            
+            if (m.includes("vector") || m.includes("faiss") || m.includes("memory search")) {
                 this.setStage('AGENT', 'done');
                 this.setStage('VECTOR', 'active', 'Scanning similarity memory...');
             }
-            if (message.includes("Compiling") || message.includes("Retrieval complete")) {
+            
+            if (m.includes("compiling") || m.includes("retrieval complete") || m.includes("ready for inference")) {
                 this.setStage('VECTOR', 'done', 'Context compiled.');
             }
-            if (message.includes("AI Agent is thinking")) {
+            
+            if (m.includes("ai agent is thinking") || m.includes("invoking actual llm")) {
                 this.setStage('RCA', 'active', 'Drafting analysis...');
             }
-            if (message.includes("Saved LLM")) {
+            
+            if (m.includes("saved llm") || m.includes("analysis saved")) {
                 this.setStage('RCA', 'done', 'Analysis stored.');
+            }
+
+            if (m.includes("pipeline finished")) {
+                this.stages.forEach(s => this.setStage(s, 'done'));
             }
         }
     };
@@ -284,8 +297,10 @@ document.addEventListener('DOMContentLoaded', () => {
             card.querySelectorAll('.rca-section-header').forEach(btn => {
                 btn.addEventListener('click', () => {
                     btn.parentElement.classList.toggle('open');
-                    btn.querySelector('.section-chevron').setAttribute('data-lucide', btn.parentElement.classList.contains('open') ? 'chevron-up' : 'chevron-down');
-                    lucide.createIcons();
+                    const iconContainer = btn.querySelector('.section-chevron');
+                    const isOpen = btn.parentElement.classList.contains('open');
+                    iconContainer.outerHTML = `<i data-lucide="${isOpen ? 'chevron-up' : 'chevron-down'}" class="section-chevron"></i>`;
+                    if (window.lucide) lucide.createIcons();
                 });
             });
         });

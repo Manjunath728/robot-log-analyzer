@@ -270,11 +270,6 @@ If needs_more_context is false, keywords_needed must be [].
                         "keywords_needed": keywords_needed,
                         "needs_more": needs_more
                     }) + "\n"
-                        keywords_needed = []
-
-                    yield json.dumps({"type": "status", "message": 
-                        f"► [Test: {failure.name}] Agent context decision: {'expanding KW depth for: ' + str(keywords_needed) if needs_more else 'sufficient context, proceeding.'}"
-                    }) + "\n"
 
                 # --- PHASE 2: Conditional Deep Fetch ---
                 if needs_more and keywords_needed:

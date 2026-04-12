@@ -26,7 +26,7 @@ from engine.config import (
 from engine.parser import parse_output_xml
 from engine.helpers import failure_to_doc
 from engine.logger import logger
-from engine.cli import bootstrap_schema, clear_db, load_repo_to_graph
+from engine.cli import bootstrap_schema, clear_kb_topology, load_repo_to_graph
 
 def sync_kb_generator():
     """Generator for KB synchronization status updates."""
@@ -37,8 +37,8 @@ def sync_kb_generator():
         bootstrap_schema(graph)
         yield json.dumps({"type": "status", "message": "⚡ Bootstrapping Neo4j Schema (Constraints & Labels)..."}) + "\n"
         
-        clear_db(graph)
-        yield json.dumps({"type": "status", "message": "[*] Wiping previous Graph topology..."}) + "\n"
+        clear_kb_topology(graph)
+        yield json.dumps({"type": "status", "message": "[*] Refreshing KB topology (preserving failure memory)..."}) + "\n"
         
         temp_repos_root = "temp_repos"
         os.makedirs(temp_repos_root, exist_ok=True)
@@ -125,16 +125,17 @@ def serve_index():
 
 @app.post("/api/analyze")
 async def analyze_failures(file: UploadFile = File(...)):
-    # Eagerly read file content into memory asynchronously to avoid blocking
-    content = await file.read()
+    # Eagerly read file content into memory asynchronously before entering the generator/thread
+    file_bytes = await file.read()
+    filename = file.filename
     
-    def event_stream():
+    def event_stream(content: bytes, fname: str):
         # Multi-user safe: unique filename per request
         unique_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
         temp_file_path = f"temp_data/output_{unique_id}.xml"
         
-        logger.info(f"Incoming Request: File={file.filename}, TempPath={temp_file_path}")
-        yield json.dumps({"type": "status", "message": f"Processing file: {file.filename}..."}) + "\n"
+        logger.info(f"Incoming Request: File={fname}, TempPath={temp_file_path}")
+        yield json.dumps({"type": "status", "message": f"Processing file: {fname}..."}) + "\n"
         
         try:
             # Write bytes from memory to disk
@@ -148,7 +149,7 @@ async def analyze_failures(file: UploadFile = File(...)):
             
         try:
             logger.info("Parsing XML output...")
-            yield json.dumps({"type": "status", "message": f"Parsing XML output '{file.filename}'..."}) + "\n"
+            yield json.dumps({"type": "status", "message": f"Parsing XML output '{fname}'..."}) + "\n"
             try:
                 failures = parse_output_xml(temp_file_path)
             except Exception as e:
@@ -176,8 +177,15 @@ async def analyze_failures(file: UploadFile = File(...)):
 
             logger.info("Initializing Short-term Flow Memory (FAISS)...")
             yield json.dumps({"type": "status", "message": "Embedding trace logs into temporary FAISS memory..."}) + "\n"
+            
             failure_docs = [failure_to_doc(f) for f in failures]
+            if not failure_docs:
+                logger.warning("No failure trace logs to index.")
+                yield json.dumps({"type": "error", "message": "No failure trace logs found to index."}) + "\n"
+                return
+
             temp_failure_db = FAISS.from_documents(failure_docs, embedding)
+            faiss_k = min(4, len(failure_docs))
 
             for failure in failures:
                 logger.info(f"Analyzing Failure: {failure.name}")
@@ -185,7 +193,7 @@ async def analyze_failures(file: UploadFile = File(...)):
                 
                 cypher_query = """
                 MATCH (t:TestCase {name: $test_name})
-                OPTIONAL MATCH (t)-[:CALLS*]->(k:Keyword)
+                OPTIONAL MATCH (t)-[:CALLS*1..10]->(k:Keyword)
                 OPTIONAL MATCH (t)-[:HAD_FAILURE]->(f:PastFailure)
                 RETURN t.name AS test_name, t.tags AS test_tags, t.steps AS test_steps, 
                        collect(DISTINCT {name: k.name, raw_text: k.raw_text}) AS nested_keywords,
@@ -212,7 +220,7 @@ async def analyze_failures(file: UploadFile = File(...)):
 
                 yield json.dumps({"type": "status", "message": f"► [Test: {failure.name}] Fetching Vector Context Memory..."}) + "\n"
                 search_query = f"Keyword mapping failure '{failure.failed_keyword}' yielding '{failure.failed_keyword_message}'."
-                exec_results = temp_failure_db.similarity_search(search_query, k=4)
+                exec_results = temp_failure_db.similarity_search(search_query, k=faiss_k)
                 exec_content = "\n\n---\n\n".join([f"[SIMILAR RUNTIME CRASH LOG: {doc.metadata.get('test', 'Unknown')}]\n{doc.page_content}" for doc in exec_results])
 
                 logger.info(f"Context compiled for {failure.name}. Ready for inference.")
@@ -259,12 +267,15 @@ Include these sections:
                     
                 try:
                     write_query = """
+                    CREATE (f:PastFailure {
+                        failed_keyword: $failed_kw,
+                        error_message: $error_msg,
+                        rca_content: $rca,
+                        timestamp: datetime()
+                    })
+                    WITH f
                     MATCH (t:TestCase {name: $test_name})
-                    MERGE (t)-[:HAD_FAILURE]->(f:PastFailure)
-                    SET f.failed_keyword = $failed_kw,
-                        f.error_message = $error_msg,
-                        f.rca_content = $rca,
-                        f.timestamp = datetime()
+                    MERGE (t)-[:HAD_FAILURE]->(f)
                     """
                     robot_graph.query(write_query, params={
                         "test_name": failure.name,
@@ -300,5 +311,5 @@ Include these sections:
                     logger.warning(f"Final cleanup failed for {temp_file_path}: {e}")
 
     # Run the sync generator in a thread pool using the wrapper
-    gen = event_stream()
+    gen = event_stream(file_bytes, filename)
     return StreamingResponse(wrap_sync_generator(gen), media_type="application/x-ndjson")

@@ -81,16 +81,25 @@ def sync_kb_sources():
     for _ in sync_kb_generator():
         pass
 
+# Sentinel object to safely signal the end of a sync generator across threads
+_STOP_SIGNAL = object()
+
+def _safe_next(gen):
+    try:
+        return next(gen)
+    except StopIteration:
+        return _STOP_SIGNAL
+
 # Helper function to run a sync generator in a thread pool to avoid blocking the event loop
 async def wrap_sync_generator(gen):
     loop = asyncio.get_event_loop()
     while True:
         try:
-            # Shift the sync 'next(gen)' call to a thread
-            res = await loop.run_in_executor(None, next, gen)
+            # Shift the sync iteration call to a thread safely
+            res = await loop.run_in_executor(None, _safe_next, gen)
+            if res is _STOP_SIGNAL:
+                break
             yield res
-        except StopIteration:
-            break
         except Exception as e:
             yield json.dumps({"type": "error", "message": f"Stream Error: {str(e)}"}) + "\n"
             break

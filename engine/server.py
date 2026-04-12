@@ -11,10 +11,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from langchain_community.vectorstores import FAISS
 from langchain_neo4j import Neo4jGraph
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
 
 from engine.config import (
     NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD,
-    EMBEDDING_MODEL,
+    EMBEDDING_MODEL, LLM_DEBUG, OPENROUTER_API_KEY,
+    LLM_MODEL, LLM_BASE_URL, LLM_TEMPERATURE
 )
 from engine.parser import parse_output_xml
 from engine.helpers import failure_to_doc
@@ -141,8 +143,23 @@ TASK: Analyze why '{failure.name}' broke. You must structure your output STRICTL
 4. **Recommendations / Context**: Any further actions required, missing variables, or confidence metrics.
 ===============================================
 """
-                # Bypass LLM strictly to route Context Engine directly to UI for debugging
-                rca_text = prompt
+                if LLM_DEBUG:
+                    logger.info(f"LLM_DEBUG is TRUE. Invoking actual LLM ({LLM_MODEL})...")
+                    try:
+                        llm = ChatOpenAI(
+                            model=LLM_MODEL,
+                            api_key=OPENROUTER_API_KEY,
+                            base_url=LLM_BASE_URL,
+                            temperature=LLM_TEMPERATURE,
+                        )
+                        response = llm.invoke(prompt)
+                        rca_text = response.content
+                    except Exception as e:
+                        logger.error(f"LLM Invocation Failed: {str(e)}")
+                        rca_text = f"AI Evaluation failed: {str(e)}"
+                else:
+                    logger.info("LLM_DEBUG is FALSE. Returning raw prompt for audit.")
+                    rca_text = prompt
                     
                 try:
                     write_query = """

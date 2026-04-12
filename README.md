@@ -13,11 +13,22 @@ A simple tool to help you understand why your Robot Framework tests failed. It l
    ```bash
    docker-compose up -d
    ```
-2. Install Python requirements:
+2. Set up a virtual environment:
+   - **Linux / WSL**: 
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+   - **Windows**: 
+     ```bash
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+3. Install requirements:
    ```bash
    pip install -r requirements.txt
    ```
-3. Create a `.env` file (copy from `.env.example`) and add your OpenRouter API key.
+4. Create a `.env` file (copy from `.env.example`) and add your OpenRouter API key.
 
 ## 2. Usage
 

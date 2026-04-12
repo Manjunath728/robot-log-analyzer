@@ -125,6 +125,12 @@ h1 span {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
     font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
 }
 
 .btn-secondary:hover {
@@ -133,13 +139,92 @@ h1 span {
     color: var(--primary);
 }
 
-.btn-secondary i {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.3s ease;
+.btn-secondary.syncing i {
+    animation: rotate 1s infinite linear;
 }
 
-.syncing i {
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: rgba(0,0,0,0.4);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 8px var(--primary);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(102,252,241, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(102,252,241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(102,252,241, 0); }
+}
+
+button:not(.btn-secondary) {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    padding: 0.8rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: inherit;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:not(.btn-secondary):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(102,252,241, 0.4);
+}
+
+button:not(.btn-secondary):disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+    background: rgba(102, 252, 241, 0.1);
+    border-color: var(--primary-dim);
+    color: var(--primary);
+}
+
+.btn-secondary.syncing i {
     animation: rotate 1s infinite linear;
 }
 

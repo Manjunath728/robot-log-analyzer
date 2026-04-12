@@ -256,6 +256,7 @@ If needs_more_context is false, keywords_needed must be [].
                     scout_llm = ChatOpenAI(model=LLM_MODEL, api_key=OPENROUTER_API_KEY, 
                                            base_url=LLM_BASE_URL, temperature=0.0)
                     try:
+                        scout_response = scout_llm.invoke(scout_prompt)
                         rca_data = json.loads(clean_llm_json(scout_response.content))
                         needs_more = rca_data.get("needs_more_context", False)
                         keywords_needed = rca_data.get("keywords_needed", [])[:5]  # hard cap at 5

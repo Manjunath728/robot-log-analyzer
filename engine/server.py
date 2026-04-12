@@ -212,19 +212,75 @@ async def analyze_failures(file: UploadFile = File(...)):
                 if not graph_results:
                     logger.warning(f"Metadata missing for {failure.name} in Graph DB.")
                     expected_content = f"Test Case '{failure.name}' not found in Static Neo4j Knowledge Graph."
+                    nested_keywords = []
                 else:
                     data = graph_results[0]
                     expected_content = f"Test: {data['test_name']}\nTags: {', '.join(data.get('test_tags', []))}\nExpected Flow: {' -> '.join(data.get('test_steps', []))}"
-                    kws = data.get('nested_keywords', [])
-                    if kws and any(k.get('name') for k in kws):
-                        glossary_str = "\n\n".join([f"--- {k['name']} ---\n{k.get('raw_text', '')}" for k in kws if k.get('name')])
-                        expected_content += f"\n\n[KEYWORD DEFINITIONS]\n{glossary_str}"
+                    nested_keywords = data.get('nested_keywords', [])
                     
                     past_fails = data.get('past_failures', [])
                     if past_fails and any(pf.get('error') for pf in past_fails):
                         logger.info(f"Retrieved {len(past_fails)} past failure records for {failure.name}.")
                         past_str = "\n\n".join([f"Time: {pf.get('date', 'Unknown')}\nError: {pf.get('error')}\nPrevious RCA: {pf.get('rca', '')}" for pf in past_fails if pf.get('error')])
-                        expected_content += f"\n\n[PAST FAILURES MEMORY]\nThe following are previous recorded failures for this exact same test case. Use them to understand if this is a recurring issue or if past fixes failed.\n\n{past_str}"
+                        expected_content += f"\n\n[PAST FAILURES MEMORY]\nThe following are previous recorded failures for this exact same test case.\n\n{past_str}"
+
+                # --- PHASE 1: Agentic Scout ---
+                needs_more = False
+                keywords_needed = []
+                
+                if LLM_ENABLED:
+                    scout_prompt = f"""
+You are analyzing a Robot Framework test failure.
+Test: {failure.name}
+Failed at keyword: {failure.failed_keyword}
+Error: {failure.failed_keyword_message}
+Known keyword names in call chain: {[k['name'] for k in nested_keywords if k.get('name')]}
+
+Do you need the implementation source of any keywords to diagnose this failure? 
+Respond ONLY with valid JSON:
+{{"needs_more_context": true, "keywords_needed": ["KwName1", "KwName2"]}}
+If needs_more_context is false, keywords_needed must be [].
+"""
+                    scout_llm = ChatOpenAI(model=LLM_MODEL, api_key=OPENROUTER_API_KEY, 
+                                           base_url=LLM_BASE_URL, temperature=0.0)
+                    try:
+                        scout_response = scout_llm.invoke(scout_prompt)
+                        scout_data = json.loads(clean_llm_json(scout_response.content))
+                        needs_more = scout_data.get("needs_more_context", False)
+                        keywords_needed = scout_data.get("keywords_needed", [])[:5]  # hard cap at 5
+                    except Exception as e:
+                        logger.error(f"Scout Phase failed: {e}")
+                        needs_more = False
+                        keywords_needed = []
+
+                    yield json.dumps({"type": "status", "message": 
+                        f"► [Test: {failure.name}] Agent context decision: {'expanding KW depth for: ' + str(keywords_needed) if needs_more else 'sufficient context, proceeding.'}"
+                    }) + "\n"
+
+                # --- PHASE 2: Conditional Deep Fetch ---
+                if needs_more and keywords_needed:
+                    deep_query = """
+                    UNWIND $kw_names AS kw_name
+                    MATCH (k:Keyword {name: kw_name})
+                    OPTIONAL MATCH (k)-[:CALLS*1..5]->(child:Keyword)
+                    RETURN k.name AS name, k.raw_text AS raw_text,
+                           collect(DISTINCT {name: child.name, raw_text: child.raw_text}) AS children
+                    """
+                    deep_results = robot_graph.query(deep_query, params={"kw_names": keywords_needed})
+                    
+                    expanded_glossary = []
+                    for row in deep_results:
+                        expanded_glossary.append(f"--- {row['name']} ---\n{row['raw_text']}")
+                        for child in row.get("children", []):
+                            if child.get("name") and child.get("raw_text"):
+                                expanded_glossary.append(f"  └─ {child['name']}\n{child['raw_text']}")
+                    
+                    extra_context = "\n" + "\n\n".join(expanded_glossary)
+                else:
+                    # Only send keyword names, no raw_text — keeps prompt lean when LLM said no
+                    extra_context = "Keyword names only: " + ", ".join(
+                        k['name'] for k in nested_keywords if k.get('name')
+                    )
 
                 yield json.dumps({"type": "status", "message": f"► [Test: {failure.name}] Fetching Vector Context Memory..."}) + "\n"
                 search_query = f"Keyword mapping failure '{failure.failed_keyword}' yielding '{failure.failed_keyword_message}'."
@@ -242,6 +298,9 @@ Analyze the failure based on the following retrieved contexts from our Vector Da
 
 [EXPECTED KNOWLEDGE BASE (NEO4J)]
 {expected_content}
+
+[AGENTIC CONTEXT ENRICHMENT]
+{extra_context}
 
 [RUNTIME CRASH CONTEXT (FAISS MEMORY)]
 {exec_content}

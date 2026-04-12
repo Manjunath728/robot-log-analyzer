@@ -222,8 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    browseLink.addEventListener('click', (e) => {
-        e.stopPropagation();
+    dropZone.addEventListener('click', () => {
         xmlUpload.click();
     });
 

@@ -371,3 +371,16 @@ Property existence constraint requires Neo4j Enterprise Edition. Note that only 
 2026-04-12 14:55:25 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
 2026-04-12 14:55:25 [INFO] audit: Full analysis pipeline finished.
 2026-04-12 14:55:25 [INFO] audit: Cleaned up temp file: temp_data/output_1776005689_12938aef.xml
+2026-04-12 15:00:33 [INFO] audit: Incoming Request: File=output.xml, TempPath=temp_data/output_1776006033_782f8afa.xml
+2026-04-12 15:00:33 [INFO] audit: File saved successfully: temp_data/output_1776006033_782f8afa.xml
+2026-04-12 15:00:33 [INFO] audit: Parsing XML output...
+2026-04-12 15:00:33 [INFO] audit: Detected 1 failed tests. Connecting to Graph/Embedding DBs...
+2026-04-12 15:00:40 [INFO] audit: ✓ Connected to Neo4j and Embedding engine.
+2026-04-12 15:00:40 [INFO] audit: Initializing Short-term Flow Memory (FAISS)...
+2026-04-12 15:00:40 [INFO] audit: Analyzing Failure: API Test 06 - Compare Two Identical API Responses
+2026-04-12 15:00:40 [INFO] audit: Retrieved 1 past failure records for API Test 06 - Compare Two Identical API Responses.
+2026-04-12 15:00:56 [INFO] audit: Context compiled for API Test 06 - Compare Two Identical API Responses. Ready for inference.
+2026-04-12 15:00:56 [INFO] audit: LLM_ENABLED is TRUE. Invoking actual LLM (nvidia/nemotron-3-super-120b-a12b:free)...
+2026-04-12 15:01:26 [INFO] audit: Analysis saved to Graph Memory for API Test 06 - Compare Two Identical API Responses
+2026-04-12 15:01:26 [INFO] audit: Full analysis pipeline finished.
+2026-04-12 15:01:26 [INFO] audit: Cleaned up temp file: temp_data/output_1776006033_782f8afa.xml

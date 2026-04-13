@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 6.1.1" generated="20260413 09:15:00.000" rpa="false" schemaversion="4">
+  <suite id="s1" name="Payment Tests" source="/home/manju/reg-analyzer/examples/tests/payment_tests.robot">
+    <test id="s1-t1" name="PAY-03 - Expired Session Token Causes Signature Rejection At Gateway">
+      <kw name="Initialise Payment Gateway Session" library="payment">
+        <kw name="Load Gateway Configuration" library="payment">
+          <kw name="Validate Gateway Config Keys" library="payment">
+            <msg timestamp="20260413 09:15:01.001" level="INFO">Validating gateway config keys</msg>
+          </kw>
+          <msg timestamp="20260413 09:15:01.002" level="INFO">Loading gateway config for merchant: MERCHANT_EXPIRED</msg>
+          <status status="PASS" starttime="20260413 09:15:01.000" endtime="20260413 09:15:01.200"/>
+        </kw>
+        <kw name="Acquire Gateway Session Token" library="payment">
+          <msg timestamp="20260413 09:15:01.210" level="INFO">Acquiring session token from: https://payments.mock-env.local/v2</msg>
+          <msg timestamp="20260413 09:15:01.220" level="WARN">WARNING: Token TTL is 0s. Token may expire immediately due to clock skew.</msg>
+          <status status="PASS" starttime="20260413 09:15:01.205" endtime="20260413 09:15:01.300"/>
+        </kw>
+        <status status="PASS" starttime="20260413 09:15:01.000" endtime="20260413 09:15:01.350"/>
+      </kw>
+      <kw name="Submit Payment Request" library="payment">
+        <kw name="Sign Payment Payload" library="payment">
+          <msg timestamp="20260413 09:15:01.400" level="INFO">Signing payment payload with session token</msg>
+          <msg timestamp="20260413 09:15:01.405" level="WARN">Generated HMAC signature using potentially expired token: EXPIRED_TOKEN_abc123</msg>
+          <status status="PASS" starttime="20260413 09:15:01.380" endtime="20260413 09:15:01.500"/>
+        </kw>
+        <kw name="Dispatch Signed Payment" library="payment">
+          <msg timestamp="20260413 09:15:01.510" level="INFO">Dispatching signed payment to gateway</msg>
+          <msg timestamp="20260413 09:15:02.800" level="ERROR">HTTPError: 401 Unauthorized — Gateway rejected payment. Response: {"error": "invalid_signature", "detail": "HMAC verification failed. Provided signature does not match server-side computation.", "code": "PAYMENT_GATEWAY_AUTH_FAILURE"}</msg>
+          <status status="FAIL" starttime="20260413 09:15:01.505" endtime="20260413 09:15:02.850"/>
+        </kw>
+        <status status="FAIL" starttime="20260413 09:15:01.360" endtime="20260413 09:15:02.900"/>
+      </kw>
+      <status status="FAIL" starttime="20260413 09:15:01.000" endtime="20260413 09:15:02.950">
+        HTTPError: 401 Unauthorized — Gateway rejected payment. Response: {"error": "invalid_signature", "detail": "HMAC verification failed. Provided signature does not match server-side computation.", "code": "PAYMENT_GATEWAY_AUTH_FAILURE"}
+      </status>
+      <tag>payment</tag>
+      <tag>auth</tag>
+      <tag>negative</tag>
+      <tag>context-depth-test</tag>
+    </test>
+    <test id="s1-t2" name="PAY-04 - Duplicate Transaction Idempotency Check Fails Under Load">
+      <kw name="Initialise Payment Gateway Session" library="payment">
+        <kw name="Load Gateway Configuration" library="payment">
+          <status status="PASS" starttime="20260413 09:15:03.000" endtime="20260413 09:15:03.100"/>
+        </kw>
+        <kw name="Acquire Gateway Session Token" library="payment">
+          <msg timestamp="20260413 09:15:03.110" level="INFO">Acquiring session token from: https://payments.mock-env.local/v2</msg>
+          <status status="PASS" starttime="20260413 09:15:03.105" endtime="20260413 09:15:03.200"/>
+        </kw>
+        <status status="PASS" starttime="20260413 09:15:03.000" endtime="20260413 09:15:03.210"/>
+      </kw>
+      <kw name="Submit Payment Request" library="payment">
+        <kw name="Sign Payment Payload" library="payment">
+          <msg timestamp="20260413 09:15:03.220" level="INFO">Signing payment payload with session token</msg>
+          <status status="PASS" starttime="20260413 09:15:03.215" endtime="20260413 09:15:03.300"/>
+        </kw>
+        <kw name="Dispatch Signed Payment" library="payment">
+          <msg timestamp="20260413 09:15:03.310" level="INFO">Dispatching signed payment to gateway</msg>
+          <status status="PASS" starttime="20260413 09:15:03.305" endtime="20260413 09:15:03.500"/>
+        </kw>
+        <status status="PASS" starttime="20260413 09:15:03.210" endtime="20260413 09:15:03.510"/>
+      </kw>
+      <kw name="Assert No Duplicate Transaction Exists" library="payment">
+        <msg timestamp="20260413 09:15:03.520" level="INFO">Checking idempotency for txn: TXN-MOCK-00000</msg>
+        <status status="PASS" starttime="20260413 09:15:03.515" endtime="20260413 09:15:03.600"/>
+      </kw>
+      <kw name="Assert No Duplicate Transaction Exists" library="payment">
+        <msg timestamp="20260413 09:15:03.610" level="INFO">Checking idempotency for txn: TXN-MOCK-00000</msg>
+        <msg timestamp="20260413 09:15:03.615" level="ERROR">AssertionError: Duplicate transaction detected for TXN-MOCK-00000
+Ledger query returned is_duplicate=True. This transaction ID was already processed.
+This typically occurs when a retry storm submits the same payload without a unique idempotency key.
+DB RowCount for TXN-MOCK-00000 = 2. Expected RowCount = 1.</msg>
+        <status status="FAIL" starttime="20260413 09:15:03.605" endtime="20260413 09:15:03.700"/>
+      </kw>
+      <status status="FAIL" starttime="20260413 09:15:03.000" endtime="20260413 09:15:03.750">
+        AssertionError: Duplicate transaction detected for TXN-MOCK-00000. Ledger RowCount=2, Expected=1. Possible retry storm or missing idempotency key in Submit Payment Request call chain.
+      </status>
+      <tag>payment</tag>
+      <tag>idempotency</tag>
+      <tag>load</tag>
+      <tag>context-depth-test</tag>
+    </test>
+    <status status="FAIL" starttime="20260413 09:15:01.000" endtime="20260413 09:15:03.760"/>
+  </suite>
+  <statistics>
+    <total>
+      <stat pass="0" fail="2" skip="0">All Tests</stat>
+    </total>
+  </statistics>
+  <errors/>
+</robot>

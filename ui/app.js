@@ -275,6 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
             let buffer = '';
 
             let currentKeywordsNeeded = [];
+            let lastRagRound = 0;
+            let ragForceExited = false;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -288,15 +290,43 @@ document.addEventListener('DOMContentLoaded', () => {
                     const event = JSON.parse(line);
                     
                     if (event.type === 'agent_decision') {
-                        currentKeywordsNeeded = event.keywords_needed || [];
-                        const msg = event.needs_more ? `🔎 Fetching: ${currentKeywordsNeeded.join(', ')}` : "✓ No expansion needed";
-                        PipelineController.setStage('GRAPH', 'done');
-                        PipelineController.setStage('AGENT', 'active', msg);
+                        // Phase 3: RAG re-query loop events
+                        if (event.rag_round !== undefined) {
+                            PipelineController.setStage('AGENT', 'done');
+                            if (!event.satisfied) {
+                                // Active re-query round
+                                lastRagRound = event.rag_round;
+                                PipelineController.setStage('VECTOR', 'active',
+                                    `🔎 Round ${event.rag_round}: ${event.search_query || '...'}`);
+                            } else {
+                                // Satisfied or force-exited
+                                lastRagRound = event.rag_round;
+                                if (event.message && event.message.includes('force')) {
+                                    ragForceExited = true;
+                                    PipelineController.setStage('VECTOR', 'done', '⚠ Loop detected — force exited');
+                                } else {
+                                    PipelineController.setStage('VECTOR', 'done',
+                                        `✓ Satisfied in ${event.rag_round} round(s)`);
+                                }
+                                PipelineController.setStage('RCA', 'active', 'Drafting analysis...');
+                            }
+                        } else {
+                            // Phase 2: KW expansion events
+                            currentKeywordsNeeded = event.keywords_needed || [];
+                            const msg = event.needs_more
+                                ? `🔎 Fetching: ${currentKeywordsNeeded.join(', ')}`
+                                : '✓ No expansion needed';
+                            PipelineController.setStage('GRAPH', 'done');
+                            PipelineController.setStage('AGENT', 'active', msg);
+                        }
                     } else if (event.type === 'result') {
                         stats.analyzed++;
                         if (event.data.rca && event.data.rca.is_systemic) stats.systemic++;
                         PipelineController.updateStats();
-                        renderFailures([event.data], currentKeywordsNeeded);
+                        renderFailures([event.data], currentKeywordsNeeded, lastRagRound, ragForceExited);
+                        // Reset per-test RAG trackers
+                        lastRagRound = 0;
+                        ragForceExited = false;
                     } else if (event.type === 'done') {
                         PipelineController.stages.forEach(s => PipelineController.setStage(s, 'done'));
                     } else {
@@ -312,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function renderFailures(failures, expandedKws = []) {
+    function renderFailures(failures, expandedKws = [], ragRounds = 0, ragForced = false) {
         failures.forEach((f, idx) => {
             const rca = f.rca;
             const isStructured = rca && typeof rca === "object" && !rca.parse_error;
@@ -361,11 +391,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             ` : `<div class="rca-content-text">${md(typeof rca === "object" ? JSON.stringify(rca) : rca)}</div>`;
 
+            // RAG chip
+            let ragChipClass = 'context-chip';
+            let ragChipLabel = '';
+            if (ragForced) {
+                ragChipClass = 'context-chip chip-red';
+                ragChipLabel = `<span class="${ragChipClass}"><i data-lucide="alert-triangle"></i> RAG: force-exited</span>`;
+            } else if (ragRounds === 1) {
+                ragChipClass = 'context-chip chip-green';
+                ragChipLabel = `<span class="${ragChipClass}"><i data-lucide="check-circle"></i> RAG: 1 round</span>`;
+            } else if (ragRounds === 2) {
+                ragChipClass = 'context-chip chip-yellow';
+                ragChipLabel = `<span class="${ragChipClass}"><i data-lucide="refresh-cw"></i> RAG: 2 rounds</span>`;
+            } else if (ragRounds >= 3) {
+                ragChipClass = 'context-chip chip-orange';
+                ragChipLabel = `<span class="${ragChipClass}"><i data-lucide="alert-circle"></i> RAG: ${ragRounds} rounds</span>`;
+            }
+
             const contextChips = `
                 <div class="card-footer">
                     ${expandedKws.length > 0 ? `
                         <span class="context-chip"><i data-lucide="zoom-in"></i> Agent Expanded Context</span>
                     ` : `<span class="context-chip"><i data-lucide="zap"></i> Sufficient Context</span>`}
+                    ${ragChipLabel}
                 </div>
             `;
 

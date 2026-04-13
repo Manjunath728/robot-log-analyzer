@@ -314,6 +314,77 @@ If needs_more_context is false, keywords_needed must be [].
                 exec_results = temp_failure_db.similarity_search(search_query, k=faiss_k)
                 exec_content = "\n\n---\n\n".join([f"[SIMILAR RUNTIME CRASH LOG: {doc.metadata.get('test', 'Unknown')}]\n{doc.page_content}" for doc in exec_results])
 
+                # --- PHASE 3: Agentic RAG re-query loop ---
+                MAX_RAG_ROUNDS = 3  # hard cap — never let LLM loop forever
+                accumulated_rag_context = []  # grows each round
+                round_num = 0
+
+                while round_num < MAX_RAG_ROUNDS:
+                    round_num += 1
+
+                    rag_decision_prompt = f"""
+You are diagnosing a Robot Framework test failure. 
+You have been given context so far. Decide if you need more information from the vector store.
+
+Test: {failure.name}
+Failed keyword: {failure.failed_keyword}
+Error: {failure.failed_keyword_message}
+KW context collected: {extra_context[:800]}
+RAG context collected so far:
+{chr(10).join(accumulated_rag_context) if accumulated_rag_context else "None yet."}
+
+Can you now identify the root cause with high confidence?
+If NO — provide a specific search query to retrieve missing context from vector store.
+If YES — stop.
+
+Respond ONLY with valid JSON:
+{{"satisfied": true/false, "search_query": "specific query string or null"}}
+"""
+                    rag_decision_response = scout_llm.invoke(rag_decision_prompt)
+
+                    try:
+                        rag_decision = json.loads(clean_llm_json(rag_decision_response.content))
+                        satisfied = rag_decision.get("satisfied", True)
+                        search_query = rag_decision.get("search_query") or ""
+                    except (Exception, ValueError):
+                        break  # malformed — exit loop safely
+
+                    if satisfied or not search_query.strip():
+                        yield json.dumps({"type": "agent_decision",
+                            "message": f"✓ RAG satisfied after {round_num} round(s). Proceeding to RCA.",
+                            "rag_round": round_num, "satisfied": True
+                        }) + "\n"
+                        break
+
+                    yield json.dumps({"type": "agent_decision",
+                        "message": f"🔎 RAG round {round_num}: querying — \"{search_query}\"",
+                        "rag_round": round_num, "satisfied": False,
+                        "search_query": search_query
+                    }) + "\n"
+
+                    # Execute LLM-decided query against the SAME temp_failure_db already built
+                    rag_results = temp_failure_db.similarity_search(search_query, k=min(3, faiss_k))
+                    round_context = "\n".join([
+                        f"[RAG round {round_num} — {doc.metadata.get('test','?')}]\n{doc.page_content}"
+                        for doc in rag_results
+                    ])
+
+                    # Dedup — skip if this context is already accumulated (LLM sometimes re-asks same thing)
+                    if round_context not in accumulated_rag_context:
+                        accumulated_rag_context.append(round_context)
+                    else:
+                        # LLM is looping on same query — force exit
+                        yield json.dumps({"type": "agent_decision",
+                            "message": "⚠ RAG loop detected (duplicate query). Forcing exit.",
+                            "rag_round": round_num, "satisfied": True
+                        }) + "\n"
+                        break
+
+                # Merge all accumulated RAG rounds into exec_content before final RCA prompt
+                if accumulated_rag_context:
+                    exec_content = exec_content + "\n\n[AGENT-REQUESTED ADDITIONAL RAG CONTEXT]\n" + \
+                                   "\n\n---\n\n".join(accumulated_rag_context)
+
                 logger.info(f"Context compiled for {failure.name}. Ready for inference.")
                 yield json.dumps({"type": "status", "message": f"⚡ [Test: {failure.name}] Retrieval complete. Compiling Agent memory..."}) + "\n"
                 yield json.dumps({"type": "inference", "message": f"⏳ [Test: {failure.name}] AI Agent is thinking & drafting RCA..."}) + "\n"

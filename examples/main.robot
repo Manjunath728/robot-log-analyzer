@@ -7,6 +7,7 @@ Resource    fragments/ui.robot
 Resource    fragments/auth.robot
 Resource    fragments/utils.robot
 Resource    fragments/payment.robot
+Resource    fragments/session_cache.robot
 
 *** Variables ***
 ${GLOBAL_TIMEOUT}         30s

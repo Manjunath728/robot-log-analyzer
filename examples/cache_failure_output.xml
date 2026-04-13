@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 6.1.1" generated="20260413 09:25:00.000" rpa="false" schemaversion="4">
+  <suite id="s1" name="Session Cache Tests" source="/home/manju/reg-analyzer/examples/tests/session_cache_tests.robot">
+
+    <test id="s1-t1" name="CACHE-03 - Session Hydration Fails Due To Cache Miss On Migrated Key Prefix">
+
+      <kw name="Load Environment Config" library="session_cache">
+        <msg timestamp="20260413 09:25:01.001" level="INFO">Loading environment config for: prod</msg>
+        <status status="PASS" starttime="20260413 09:25:01.000" endtime="20260413 09:25:01.050"/>
+      </kw>
+
+      <kw name="Fetch Personalised Dashboard Data" library="session_cache">
+
+        <kw name="Hydrate User Context From Session" library="session_cache">
+
+          <kw name="Execute Authenticated Cache Lookup" library="session_cache">
+
+            <kw name="Resolve Cache Namespace" library="session_cache">
+              <msg timestamp="20260413 09:25:01.060" level="INFO">Resolved cache namespace: session_v2:user_sessions</msg>
+              <status status="PASS" starttime="20260413 09:25:01.055" endtime="20260413 09:25:01.080"/>
+            </kw>
+
+            <kw name="Build Session Cache Key" library="session_cache">
+              <msg timestamp="20260413 09:25:01.085" level="INFO">Built session cache key: session_v2:user_sessionsUSER_LEGACY_003:fp:dead00beef</msg>
+              <status status="PASS" starttime="20260413 09:25:01.082" endtime="20260413 09:25:01.100"/>
+            </kw>
+
+            <kw name="Fetch From Redis Cache" library="session_cache">
+              <msg timestamp="20260413 09:25:01.105" level="INFO">Fetching from Redis: session_v2:user_sessionsUSER_LEGACY_003:fp:dead00beef</msg>
+              <msg timestamp="20260413 09:25:01.120" level="INFO">Redis GET returned: None</msg>
+              <status status="PASS" starttime="20260413 09:25:01.103" endtime="20260413 09:25:01.150"/>
+            </kw>
+
+            <msg timestamp="20260413 09:25:01.155" level="ERROR">TypeError: argument of type 'NoneType' is not iterable</msg>
+            <msg timestamp="20260413 09:25:01.158" level="ERROR">KeyError: 'session_data'</msg>
+            <status status="FAIL" starttime="20260413 09:25:01.053" endtime="20260413 09:25:01.160"/>
+          </kw>
+
+          <status status="FAIL" starttime="20260413 09:25:01.052" endtime="20260413 09:25:01.165"/>
+        </kw>
+
+        <status status="FAIL" starttime="20260413 09:25:01.051" endtime="20260413 09:25:01.170"/>
+      </kw>
+
+      <status status="FAIL" starttime="20260413 09:25:01.000" endtime="20260413 09:25:01.180">KeyError: 'session_data'</status>
+      <tag>cache</tag>
+      <tag>session</tag>
+      <tag>regression</tag>
+      <tag>incident</tag>
+      <tag>context-depth-test</tag>
+      <tag>rag-confuser</tag>
+    </test>
+
+    <test id="s1-t2" name="CACHE-04 - Cache Coherence Validation Races Redis Replication Lag">
+
+      <kw name="Load Environment Config" library="session_cache">
+        <msg timestamp="20260413 09:25:02.000" level="INFO">Loading environment config for: staging</msg>
+        <status status="PASS" starttime="20260413 09:25:02.000" endtime="20260413 09:25:02.040"/>
+      </kw>
+
+      <kw name="Validate Cache Coherence After Write" library="session_cache">
+
+        <kw name="Execute Authenticated Cache Lookup" library="session_cache">
+
+          <kw name="Resolve Cache Namespace" library="session_cache">
+            <msg timestamp="20260413 09:25:02.050" level="INFO">Resolved cache namespace: session_v2:user_sessions</msg>
+            <status status="PASS" starttime="20260413 09:25:02.045" endtime="20260413 09:25:02.070"/>
+          </kw>
+
+          <kw name="Build Session Cache Key" library="session_cache">
+            <msg timestamp="20260413 09:25:02.075" level="INFO">Built session cache key: session_v2:user_sessionsUSER_NEW_004:fp:11223344</msg>
+            <status status="PASS" starttime="20260413 09:25:02.072" endtime="20260413 09:25:02.090"/>
+          </kw>
+
+          <kw name="Fetch From Redis Cache" library="session_cache">
+            <msg timestamp="20260413 09:25:02.095" level="INFO">Fetching from Redis: session_v2:user_sessionsUSER_NEW_004:fp:11223344</msg>
+            <msg timestamp="20260413 09:25:02.110" level="WARN">Redis replica node redis-replica-2.internal:6379 returned NODATA. Primary write may not yet be replicated.</msg>
+            <msg timestamp="20260413 09:25:02.112" level="INFO">Redis GET returned: None</msg>
+            <status status="PASS" starttime="20260413 09:25:02.093" endtime="20260413 09:25:02.130"/>
+          </kw>
+
+          <msg timestamp="20260413 09:25:02.135" level="ERROR">TypeError: argument of type 'NoneType' is not iterable</msg>
+          <msg timestamp="20260413 09:25:02.138" level="ERROR">KeyError: 'session_data'</msg>
+          <status status="FAIL" starttime="20260413 09:25:02.043" endtime="20260413 09:25:02.145"/>
+        </kw>
+
+        <msg timestamp="20260413 09:25:02.150" level="ERROR">AssertionError: Cache coherence check failed — write not yet replicated</msg>
+        <status status="FAIL" starttime="20260413 09:25:02.042" endtime="20260413 09:25:02.160"/>
+      </kw>
+
+      <status status="FAIL" starttime="20260413 09:25:02.000" endtime="20260413 09:25:02.170">AssertionError: Cache coherence check failed — write not yet replicated</status>
+      <tag>cache</tag>
+      <tag>coherence</tag>
+      <tag>flaky</tag>
+      <tag>context-depth-test</tag>
+      <tag>rag-confuser</tag>
+    </test>
+
+    <status status="FAIL" starttime="20260413 09:25:01.000" endtime="20260413 09:25:02.180"/>
+  </suite>
+  <statistics>
+    <total>
+      <stat pass="0" fail="2" skip="0">All Tests</stat>
+    </total>
+  </statistics>
+  <errors/>
+</robot>
